@@ -1,0 +1,125 @@
+[project]
+name = "wikiform"
+version = "1.0.0"
+dynamic = ["dependencies"]
+description = "LLM-powered wiki management CLI"
+requires-python = ">=3.14"
+authors = [{ name = "Harish SEGAR <segharish@gmail.com>" }]
+keywords = [
+    "wiki",
+    "knowledge management",
+    "LLM",
+    "obsidian",
+    "markdown",
+    "FTS5",
+]
+classifiers = ["Programming Language :: Python :: 3.14"]
+
+[project.urls]
+homepage = "https://github.com/wikiform/wikiform"
+repository = "https://github.com/wikiform/wikiform"
+documentation = "https://github.com/wikiform/wikiform"
+issues = "https://github.com/wikiform/wikiform/issues"
+changelog = "https://github.com/wikiform/wikiform/blob/main/CHANGELOG.md"
+
+[project.scripts]
+wikiform = "wikiform.cli:cli"
+
+[tool.pytest.ini_options]
+addopts = ""
+testpaths = ["tests"]
+
+[tool.coverage.run]
+branch = true
+source = ["wikiform"]
+disable_warnings = ["no-data-collected"]
+
+[tool.coverage.report]
+exclude_lines = ["pragma: no cover", "raise NotImplementedError"]
+
+[tool.coverage.html]
+directory = "coverage_html_report"
+
+[tool.ruff]
+line-length = 160
+exclude = ["tests"]
+
+# Linter rule sets
+select = [
+    "E",   # pycodestyle (errors)
+    "F",   # pyflakes
+    "W",   # pycodestyle (warnings)
+    "B",   # flake8-bugbear
+    "S",   # bandit (security)
+    "I",   # isort-compatible import sorting
+    "UP",  # pyupgrade
+    "C90", # mccabe complexity
+]
+
+# Ignore specific rules
+ignore = [
+    "E203",  # Whitespace before ':'
+    "E501",  # Line length (handled by formatter)
+    "E701",  # Multiple statements on one line (if/else/for)
+    "UP007", # Union type annotation
+    "C901",  # Function is too complex
+    "B006",  # Do not use mutable data structures for argument defaults
+    "S105",  # Possible hardcoded password assigned
+]
+
+# Formatter (Black-compatible)
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+docstring-code-format = true
+skip-magic-trailing-comma = false
+
+[tool.poetry]
+name = "wikiform"
+version = "1.0.0"
+description = "Wiki vault maintenance CLI — index, lint, and search your wiki."
+authors = ["Harish SEGAR <segharish@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+homepage = "https://github.com/wikiform/wikiform"
+repository = "https://github.com/wikiform/wikiform"
+documentation = "https://github.com/wikiform/wikiform"
+keywords = [
+    "wiki",
+    "knowledge management",
+    "LLM",
+    "obsidian",
+    "markdown",
+    "FTS5",
+]
+packages = [{ include = "wikiform" }]
+exclude = ["wikiform/tests/*"]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0", "setuptools"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.dependencies]
+python = "^3.14"
+click = "^8.1"
+python-frontmatter = "^1.1"
+loguru = "^0.7"
+rich = "^13.0"
+fastapi = "^0.111"
+uvicorn = { version = "^0.29", extras = ["standard"] }
+
+[tool.poetry.group.dev.dependencies]
+bandit = "^1.9.3"
+black = "^26.1.0"
+flake8 = "^7.3.0"
+pre-commit = "^4.5.1"
+pytest = "^9.0.2"
+pytest-cov = "7.0.0"
+ruff = "^0.14.13"
+wheel = "^0.46.0"
+yamllint = "^1.38.0"
+twine = "^6.2.0"
+
+[tool.poetry.scripts]
+vault = "wikiform.cli:cli"

@@ -1,0 +1,6 @@
+[flake8]
+max-line-length = 160
+extend-select = B950
+extend-ignore = E203,E501,E701,W503
+exclude =
+    tests/*

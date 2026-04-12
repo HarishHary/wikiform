@@ -1,0 +1,14 @@
+.DS_Store
+dist/
+imports/*
+!imports/__init__.py
+Pipfile.lock
+__pycache__
+venv
+.venv
+.vscode/
+.python-version
+.ruff_cache/*
+build/*
+*.egg-info/*
+wikiform/_version.py
