@@ -7,6 +7,7 @@ from typing import Any
 import frontmatter
 from loguru import logger
 
+logger = logger.bind(service="Wikiform - FS")
 
 SKIP_DIRS: frozenset[str] = frozenset({
     ".obsidian",
@@ -19,6 +20,7 @@ SKIP_DIRS: frozenset[str] = frozenset({
 SKIP_FILES: frozenset[str] = frozenset({
     "README.md",
     "LICENSE.md",
+    "SCHEMA.md",
 })
 
 # Prefixes that indicate a line is structural markup, not prose.
@@ -161,7 +163,7 @@ def collect_md_files(vault_root: Path) -> list[Path]:
 
 
 def extract_wikilinks(content: str) -> list[str]:
-    """Extract [[target]] and [[target|alias]] wikilink targets."""
+    """Extract [[target]] and [[target|alias]] wikilink targets, skipping ![[embed]] syntax."""
     return re.findall(
-        r"\[\[([^\]|#]+)(?:#[^\]|]+)?(?:\|[^\]]+)?\]\]", content
+        r"(?<!!)\[\[([^\]|#]+)(?:#[^\]|]+)?(?:\|[^\]]+)?\]\]", content
     )

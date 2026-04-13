@@ -7,6 +7,7 @@ from pathlib import Path
 from loguru import logger
 
 
+logger = logger.bind(service="Wikiform - Config")
 # Required frontmatter fields when SCHEMA.md has no parseable block.
 DEFAULT_REQUIRED_FIELDS: frozenset[str] = frozenset({"title", "tags", "updated"})
 
@@ -23,7 +24,7 @@ class SchemaConfig:
 def _parse_categories(text: str) -> list[str]:
     match = re.search(r"## Index Categories\n(.*?)(?=\n## |\Z)", text, re.DOTALL)
     if not match:
-        logger.warning("No '## Index Categories' section found in SCHEMA.md")
+        logger.debug("No '## Index Categories' section found in SCHEMA.md")
         return []
     categories = [
         line.strip().lstrip("-").strip()
@@ -60,7 +61,7 @@ def _parse_required_fields(text: str) -> frozenset[str]:
 def _read_schema_text(vault_root: Path) -> str | None:
     schema_path = vault_root / "SCHEMA.md"
     if not schema_path.exists():
-        logger.warning("SCHEMA.md not found at {}", schema_path)
+        logger.debug("SCHEMA.md not found at {}", schema_path)
         return None
     return schema_path.read_text(encoding="utf-8")
 

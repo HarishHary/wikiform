@@ -20,6 +20,8 @@ from wikiform.utils.fs import (
 )
 from wikiform.utils.config import read_schema_required_fields
 
+logger = logger.bind(service="Wikiform - Lint")
+
 
 @dataclass
 class FileInfo:
@@ -146,6 +148,7 @@ _KEBAB_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 _TAG_NORMALISE_RE = re.compile(r"[-_\s]+")
 _STALE_RAW_DAYS: int = 7
 _SECONDS_PER_DAY: int = 86400
+_HEALTH_FAIR_WARNING_THRESHOLD: int = 5
 
 
 # ─── Linter ───────────────────────────────────────────────────────────────────
@@ -179,7 +182,7 @@ class Linter:
         issues: list[Issue] = []
         for path, info in self.files.items():
             meta = info.meta
-            if meta.get("auto_generated") or path in AUTO_GENERATED_WIKI_FILES:
+            if path in AUTO_GENERATED_WIKI_FILES or meta.get("auto_generated"):
                 continue
             if not meta:
                 issues.append(Issue(
@@ -343,18 +346,19 @@ class Linter:
 
     def _all_checks(self) -> dict[IssueCheck, Callable[[], list[Issue]]]:
         return {
-            "broken_link":      self.check_broken_links,
-            "frontmatter":      self.check_frontmatter,
-            "orphan":           self.check_orphans,
-            "tag_consistency":  self.check_tag_consistency,
-            "stale_raw":        self.check_stale_raw,
-            "naming":           self.check_naming,
-            "empty":            self.check_empty,
+            "broken_link": self.check_broken_links,
+            "frontmatter": self.check_frontmatter,
+            "orphan": self.check_orphans,
+            "tag_consistency": self.check_tag_consistency,
+            "stale_raw": self.check_stale_raw,
+            "naming": self.check_naming,
+            "empty": self.check_empty,
             "missing_cross_ref": self.check_cross_refs,
         }
 
     def run(self, check_name: str | None = None) -> tuple[list[Issue], list[IssueCheck]]:
         checks = self._all_checks()
+        selected: dict[IssueCheck, Callable[[], list[Issue]]] = {}
         if check_name:
             if check_name not in checks:
                 raise ValueError(
@@ -376,7 +380,7 @@ class Linter:
 # ─── Health / report ─────────────────────────────────────────────────────────
 
 def _compute_health(errors: int, warnings: int) -> HealthStatus:
-    if errors == 0 and warnings <= 5:
+    if errors == 0 and warnings <= _HEALTH_FAIR_WARNING_THRESHOLD:
         return "GOOD"
     if errors == 0:
         return "FAIR"

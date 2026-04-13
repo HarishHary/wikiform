@@ -1,3 +1,4 @@
+import sys
 import click
 import logging
 from loguru import logger
@@ -17,7 +18,8 @@ logger = logger.bind(service="Wikiform - CLI")
 @click.option("--logging-file", help="The filepath used for wikiform's logging.")
 @click.option("--vault-root", required=True, help="Vault root path")
 @click.option("-v", "--verbose", default=False, is_flag=True, help="Enable debug verbosity.")
-def cli(ctx: click.Context, logging_file: str, verbose: bool, vault_root: str) -> None:
+@click.pass_context
+def cli(ctx: click.Context, logging_file: str | None, verbose: bool, vault_root: str) -> None:
     ctx.ensure_object(dict)
     ctx.obj["vault_root"] = vault_root
 
@@ -40,9 +42,9 @@ def cli(ctx: click.Context, logging_file: str, verbose: bool, vault_root: str) -
             format="{time:YYYY-MM-DD HH:mm:ss} [{level}][{extra[service]}]: {message}",
         )
     else:
-        # Terminal log (colorized)
+        # Terminal log (colorized) → stderr so stdout stays clean JSON
         logger.add(
-            sink=lambda msg: print(msg, end=""),
+            sink=sys.stderr,
             level=verbosity,
             colorize=True,
             format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> <level>[{level}][{extra[service]}]: {message}</level>",
@@ -53,7 +55,7 @@ def cli(ctx: click.Context, logging_file: str, verbose: bool, vault_root: str) -
     logging.captureWarnings(True)
 
 
-@cli.group("search", help="Full-text search: build index, query, and serve.")
+@cli.group("search", help="Full-text search: build fts-index, query, and serve.")
 def search_group() -> None:
     """Search subcommands."""
 

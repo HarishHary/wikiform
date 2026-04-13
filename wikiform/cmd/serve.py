@@ -4,12 +4,14 @@ from pathlib import Path
 
 import click
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from fastapi.responses import HTMLResponse
 from loguru import logger
 
 from wikiform.cmd.query import SearchResult, run_query
 from wikiform.utils.db import db_path
+
+logger = logger.bind(service="Wikiform - Serve")
 
 _SEARCH_UI = """<!DOCTYPE html>
 <html><head><title>Vault Search</title>
@@ -82,11 +84,11 @@ def build_app(vault_root: Path) -> FastAPI:
         return _SEARCH_UI
 
     @app.get("/search")
-    async def api_search(q: str, limit: int = 20) -> list[SearchResult]:
+    async def api_search(q: str, limit: int = Query(default=20, ge=1, le=100)) -> list[SearchResult]:
         try:
             return run_query(vault_root, q, limit=limit)
-        except Exception as exc:
-            logger.debug("Search error for query {!r}: {}", q, exc)
+        except ValueError as exc:
+            logger.warning("Search error for query {!r}: {}", q, exc)
             return []
 
     return app

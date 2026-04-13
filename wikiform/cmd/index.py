@@ -17,6 +17,8 @@ from wikiform.utils.fs import (
 )
 from wikiform.utils.config import read_schema_categories
 
+logger = logger.bind(service="Wikiform - Index")
+
 
 @dataclass
 class Article:
@@ -24,7 +26,7 @@ class Article:
     title: str
     tags: list[str]
     updated: str
-    type: str
+    kind: str
     summary: str
 
 
@@ -56,7 +58,7 @@ def _collect_articles(pages_dir: Path) -> list[Article]:
             title=title,
             tags=tags,
             updated=str(attrs.get("updated", "") or ""),
-            type=str(attrs.get("type", "") or ""),
+            kind=str(attrs.get("type", "") or ""),
             summary=str(attrs.get("summary", "") or extract_summary(body)).strip(),
         ))
     logger.info("Collected {} articles from {}", len(articles), pages_dir)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import re
 import sqlite3
@@ -13,6 +14,7 @@ from rich.table import Table
 
 from wikiform.utils.db import db_path, get_connection, sanitize_fts_query
 
+logger = logger.bind(service="Wikiform - Query")
 console = Console()
 
 
@@ -55,22 +57,22 @@ def run_query(
     params: list[str | int] = [safe_query]
 
     if tag:
-        sql += " AND a.tags LIKE ?"
-        params.append(f"%{tag}%")
+        safe_tag = tag.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        sql += " AND a.tags LIKE ? ESCAPE '\\'"
+        params.append(f"%{safe_tag}%")
     if directory:
-        sql += " AND a.path LIKE ?"
-        params.append(f"{directory}%")
+        safe_dir = directory.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        sql += " AND a.path LIKE ? ESCAPE '\\'"
+        params.append(f"{safe_dir}%")
 
     sql += " ORDER BY rank LIMIT ?"
     params.append(limit)
 
-    db = get_connection(vault_root)
-    try:
-        rows = db.execute(sql, params).fetchall()
-    except sqlite3.OperationalError as exc:
-        raise ValueError(str(exc)) from exc
-    finally:
-        db.close()
+    with contextlib.closing(get_connection(vault_root)) as db:
+        try:
+            rows = db.execute(sql, params).fetchall()
+        except sqlite3.OperationalError as exc:
+            raise ValueError(str(exc)) from exc
 
     return [
         SearchResult(
@@ -89,7 +91,7 @@ def run_query(
 @click.argument("query")
 @click.option("--tag", default=None, help="Filter by tag (substring match)")
 @click.option("--dir", "directory", default=None, help="Filter by path prefix")
-@click.option("--limit", default=20, show_default=True, help="Max results")
+@click.option("--limit", default=20, show_default=True, type=click.IntRange(1, 100), help="Max results (1–100)")
 @click.option("--json", "as_json", is_flag=True, help="Print results as JSON to stdout")
 @click.option("-o", "--output", type=click.Path(dir_okay=False, path_type=Path), default=None, help="Write JSON results to file")
 @click.pass_context

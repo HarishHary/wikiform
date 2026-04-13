@@ -12,6 +12,8 @@ from loguru import logger
 from wikiform.utils.db import get_connection, init_db
 from wikiform.utils.fs import collect_md_files, load_frontmatter, normalize_rel, normalize_tags
 
+logger = logger.bind(service="Wikiform - FTS Index")
+
 
 @dataclass
 class ParsedMd:

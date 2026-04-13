@@ -4,7 +4,6 @@ import re
 import sqlite3
 from pathlib import Path
 
-
 DB_RELATIVE = Path("scripts") / "vault-search.db"
 
 
