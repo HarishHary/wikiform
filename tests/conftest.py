@@ -41,6 +41,6 @@ def vault(tmp_path: Path) -> Path:
     """Minimal vault with SCHEMA.md and required directories."""
     (tmp_path / "wiki" / "pages").mkdir(parents=True)
     (tmp_path / "raw").mkdir()
-    (tmp_path / "scripts").mkdir()
+    (tmp_path / "_meta").mkdir()
     (tmp_path / "SCHEMA.md").write_text(SCHEMA_MD, encoding="utf-8")
     return tmp_path

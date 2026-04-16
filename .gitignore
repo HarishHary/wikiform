@@ -12,3 +12,4 @@ venv
 build/*
 *.egg-info/*
 wikiform/_version.py
+_meta/

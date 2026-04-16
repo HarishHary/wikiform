@@ -3,6 +3,7 @@ import click
 import logging
 from loguru import logger
 from wikiform.cmd.index import index_cmd
+from wikiform.cmd.ingest import ingest_cmd
 from wikiform.cmd.lint import lint_cmd
 from wikiform.cmd.query import query_cmd
 from wikiform.cmd.fts_index import fts_index_cmd
@@ -65,5 +66,6 @@ search_group.add_command(query_cmd)
 search_group.add_command(serve_cmd)
 
 cli.add_command(index_cmd)
+cli.add_command(ingest_cmd)
 cli.add_command(lint_cmd)
 cli.add_command(search_group)

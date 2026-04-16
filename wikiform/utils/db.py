@@ -4,7 +4,7 @@ import re
 import sqlite3
 from pathlib import Path
 
-DB_RELATIVE = Path("scripts") / "vault-search.db"
+DB_RELATIVE = Path("_meta") / "vault-search.db"
 
 
 def db_path(vault_root: Path) -> Path:

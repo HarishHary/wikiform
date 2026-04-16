@@ -15,7 +15,7 @@ from wikiform.utils.db import (
 
 def test_db_path_location(tmp_path: Path):
     result = db_path(tmp_path)
-    assert result == tmp_path / "scripts" / "vault-search.db"
+    assert result == tmp_path / "_meta" / "vault-search.db"
 
 
 # ─── get_connection ───────────────────────────────────────────────────────────
@@ -23,7 +23,7 @@ def test_db_path_location(tmp_path: Path):
 def test_get_connection_creates_parent_dir(tmp_path: Path):
     db = get_connection(tmp_path)
     db.close()
-    assert (tmp_path / "scripts").is_dir()
+    assert (tmp_path / "_meta").is_dir()
 
 
 def test_get_connection_returns_row_factory(tmp_path: Path):
