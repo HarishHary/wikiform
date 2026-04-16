@@ -72,7 +72,7 @@ def sanitize_fts_query(query: str) -> str:
        phrase tokens: multi-head → "multi-head"
     3. Collapse whitespace.
 
-    AND, OR, NOT are preserved — users may use them intentionally.
+    AND, OR, NOT are preserved - users may use them intentionally.
     """
     sanitized = re.sub(r'[\^*()\[\]{}"+]', " ", query)
     sanitized = re.sub(r"(\b\w+(?:-\w+)+\b)", r'"\1"', sanitized)

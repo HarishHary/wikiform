@@ -103,7 +103,7 @@ class IndexWriter:
             "",
             "# Wiki Index",
             "",
-            "> Auto-generated. Do not edit manually — changes will be overwritten by vault index.",
+            "> Auto-generated. Do not edit manually - changes will be overwritten by vault index.",
             "",
             f"*{len(self.articles)} pages across {total_categories} categories*",
             "",
@@ -114,7 +114,7 @@ class IndexWriter:
             lines.append(f"## {category}")
             if items:
                 for article in items:
-                    desc = f" — {article.summary}" if article.summary else ""
+                    desc = f" - {article.summary}" if article.summary else ""
                     lines.append(f"- [[{article.stem}|{article.title}]]{desc}")
             else:
                 lines.append("<!-- no pages in this category yet -->")
@@ -145,7 +145,7 @@ class IndexWriter:
             "",
             "# Master Index",
             "",
-            "> Auto-generated. Do not edit manually — changes will be overwritten by vault index.",
+            "> Auto-generated. Do not edit manually - changes will be overwritten by vault index.",
             "",
             f"*{len(self.articles)} pages*",
             "",
@@ -154,7 +154,7 @@ class IndexWriter:
         for letter in sorted(by_letter.keys()):
             lines.append(f"## {letter}")
             for article in by_letter[letter]:
-                desc = f" — {article.summary}" if article.summary else ""
+                desc = f" - {article.summary}" if article.summary else ""
                 lines.append(f"- [[{article.stem}|{article.title}]]{desc}")
             lines.append("")
 
@@ -180,7 +180,7 @@ class IndexWriter:
             "",
             "# Tag Index",
             "",
-            "> Auto-generated. Do not edit manually — changes will be overwritten by vault index.",
+            "> Auto-generated. Do not edit manually - changes will be overwritten by vault index.",
             "",
             f"*{len(by_tag)} tags across {len(self.articles)} pages*",
             "",

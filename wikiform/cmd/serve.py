@@ -58,7 +58,7 @@ document.getElementById('q').addEventListener('input', e => {
                     const tagsEl = document.createElement('div');
                     tagsEl.className = 'tags';
                     tagsEl.textContent = r.tags || '';
-                    // FTS5 wraps matches in <b>...</b> — build with DOM nodes, no innerHTML
+                    // FTS5 wraps matches in <b>...</b> - build with DOM nodes, no innerHTML
                     const snippetEl = document.createElement('div');
                     snippetEl.className = 'snippet';
                     (r.snippet || '').split(/(<b>[^<]*<\\/b>)/).forEach(part => {

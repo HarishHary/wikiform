@@ -174,7 +174,7 @@ class Linter:
                 if not _resolve_link(link, self.files, self._stem_map):
                     issues.append(Issue(
                         type="error", check="broken_link", file=path,
-                        message=f"Broken wikilink [[{link}]] — no matching file found",
+                        message=f"Broken wikilink [[{link}]] - no matching file found",
                     ))
         return issues
 
@@ -246,13 +246,13 @@ class Linter:
             if tag_counts[tag] == 1:
                 issues.append(Issue(
                     type="info", check="tag_consistency", file=None,
-                    message=f"Tag '{tag}' used only once — possible typo?",
+                    message=f"Tag '{tag}' used only once - possible typo?",
                 ))
             normalised = _TAG_NORMALISE_RE.sub("", tag)
             if normalised in seen and seen[normalised] != tag:
                 issues.append(Issue(
                     type="info", check="tag_consistency", file=None,
-                    message=f"Similar tags: '{seen[normalised]}' and '{tag}' — consider merging",
+                    message=f"Similar tags: '{seen[normalised]}' and '{tag}' - consider merging",
                 ))
             seen[normalised] = tag
         return issues
@@ -268,7 +268,7 @@ class Linter:
             if info.meta.get("status") == "raw" and info.mtime < cutoff:
                 issues.append(Issue(
                     type="info", check="stale_raw", file=path,
-                    message=f"Raw source older than {_STALE_RAW_DAYS} days with status 'raw' — not yet ingested",
+                    message=f"Raw source older than {_STALE_RAW_DAYS} days with status 'raw' - not yet ingested",
                 ))
         return issues
 
@@ -421,7 +421,7 @@ def run_lint(
     )
 
     logger.info(
-        "Finished: {} files, {} errors, {} warnings, {} infos — {}",
+        "Finished: {} files, {} errors, {} warnings, {} infos - {}",
         summary.files_scanned, errors, warnings, infos, summary.overall_health,
     )
     return report

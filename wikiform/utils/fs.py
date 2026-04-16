@@ -101,7 +101,7 @@ def load_frontmatter(path: Path) -> tuple[dict[str, Any], str]:
 
 def collect_pages(pages_dir: Path) -> list[Path]:
     """
-    Return all .md files in wiki/pages/ — flat only, no subdirectories.
+    Return all .md files in wiki/pages/ - flat only, no subdirectories.
     Skips reserved filenames.
     """
     if not pages_dir.exists():

@@ -78,7 +78,7 @@ skip-magic-trailing-comma = false
 [tool.poetry]
 name = "wikiform"
 version = "1.0.0"
-description = "Wiki vault maintenance CLI — index, lint, and search your wiki."
+description = "Wiki vault maintenance CLI - index, lint, and search your wiki."
 authors = ["Harish SEGAR <segharish@gmail.com>"]
 license = "MIT"
 readme = "README.md"
