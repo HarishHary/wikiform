@@ -34,17 +34,17 @@ make install # build + pip install wheel
 
 ## Architecture
 
-Wikiform is a Python CLI (`wikiform/cli.py`) for managing Obsidian-style markdown vaults. The entry point is `wikiform.cli:cli` (also aliased as `vault`). It uses a **two-level Click group**: the parent `cli` collects the global `--vault-root PATH` option and stores it in `ctx.obj["vault_root"]`; all subcommands retrieve it from there.
+Wikiform is a Python CLI (`wikiform/cli.py`) for managing Obsidian-style markdown vaults. The entry point is `wikiform.cli:cli`. It uses a **two-level Click group**: the parent `cli` collects the global `--vault-root PATH` option and stores it in `ctx.obj["vault_root"]`; all subcommands retrieve it from there.
 
 ### Commands (`wikiform/cmd/`)
 
-| Command              | File                        | Purpose                                                                                         |
-| -------------------- | --------------------------- | ----------------------------------------------------------------------------------------------- |
-| `index`              | `cmd/index.py`              | Regenerates `wiki/index.md`, `wiki/master-index.md`, `wiki/tag-index.md` from `wiki/pages/*.md` |
-| `lint`               | `cmd/lint.py`               | Runs structural checks on the vault (broken links, frontmatter, orphans, naming, etc.)          |
-| `build-search-index` | `cmd/build_search_index.py` | Builds/updates the FTS5 SQLite search index                                                     |
-| `query`              | `cmd/query.py`              | Searches via FTS5, renders results with Rich                                                    |
-| `serve`              | `cmd/serve.py`              | FastAPI + uvicorn web UI at port 8787                                                           |
+| Command        | File               | Purpose                                                                                         |
+| -------------- | ------------------ | ----------------------------------------------------------------------------------------------- |
+| `index`        | `cmd/index.py`     | Regenerates `wiki/index.md`, `wiki/master-index.md`, `wiki/tag-index.md` from `wiki/pages/*.md` |
+| `lint`         | `cmd/lint.py`      | Runs structural checks on the vault (broken links, frontmatter, orphans, naming, etc.)          |
+| `search index` | `cmd/fts_index.py` | Builds/updates the FTS5 SQLite search index                                                     |
+| `search query` | `cmd/query.py`     | Searches via FTS5, renders results with Rich                                                    |
+| `search serve` | `cmd/serve.py`     | FastAPI + uvicorn web UI at port 8787                                                           |
 
 ### Vault Directory Layout Expected
 
@@ -58,7 +58,9 @@ Wikiform is a Python CLI (`wikiform/cli.py`) for managing Obsidian-style markdow
     tag-index.md        ← auto-generated (by tag)
   raw/                  ← ingestion sources (recursive *.md)
   _meta/
-    vault-search.db     ← FTS5 SQLite database
+    vault-search.db      ← FTS5 SQLite database
+    _wiki_state.json     ← ingest extraction state (file content hashes; gitignored)
+    _wiki_llm_cache.json ← LLM response cache, keyed by content-hash:model (gitignored)
 ```
 
 ### Utilities (`wikiform/utils/`)
