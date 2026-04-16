@@ -221,6 +221,8 @@ class Linter:
                 continue
             if "templates/" in path:
                 continue
+            if path.startswith("raw/") and info.meta.get("status") != "ingested":
+                continue
             if incoming[path] == 0:
                 issues.append(Issue(
                     type="info", check="orphan", file=path,

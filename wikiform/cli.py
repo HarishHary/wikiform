@@ -4,6 +4,7 @@ import sys
 import click
 from loguru import logger
 
+from wikiform.cmd.embed import embed_cmd
 from wikiform.cmd.extract import extract_cmd
 from wikiform.cmd.fts_index import fts_index_cmd
 from wikiform.cmd.index import index_cmd
@@ -65,6 +66,7 @@ def search_group() -> None:
 
 search_group.add_command(fts_index_cmd, name="index")
 search_group.add_command(query_cmd)
+search_group.add_command(embed_cmd)
 search_group.add_command(serve_cmd)
 
 cli.add_command(extract_cmd)

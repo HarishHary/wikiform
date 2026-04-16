@@ -108,8 +108,16 @@ loguru = "^0.7"
 rich = "^13.0"
 fastapi = "^0.111"
 uvicorn = { version = "^0.29", extras = ["standard"] }
-markitdown = {version = "^0.1.5", extras = ["pdf", "docx", "xlsx", "xls", "pptx"]}
-opendataloader-pdf = ">=2.2"
+markitdown = { version = "^0.1.5", extras = [
+    "pdf",
+    "docx",
+    "xlsx",
+    "xls",
+    "pptx",
+] }
+opendataloader-pdf = "^2.2.1"
+sqlite-vec = "^0.1.9"
+sentence-transformers = "^5.4.1"
 
 [tool.poetry.group.dev.dependencies]
 bandit = "^1.9.3"

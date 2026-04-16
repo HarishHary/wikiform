@@ -13,6 +13,8 @@ from rich.console import Console
 from rich.table import Table
 
 from wikiform.utils.db import db_path, get_connection, sanitize_fts_query
+from wikiform.utils.embedder import Embedder
+from wikiform.utils.vec_db import load_sqlite_vec, serialize_vector
 
 logger = logger.bind(service="Wikiform - Query")
 console = Console()
@@ -40,6 +42,59 @@ _SEARCH_SQL = """
     JOIN articles a ON a.id = articles_fts.rowid
     WHERE articles_fts MATCH ?
 """
+
+_SEMANTIC_SQL = """
+    SELECT
+        v.rowid,
+        v.distance,
+        a.path,
+        a.title,
+        a.tags,
+        a.updated,
+        a.content
+    FROM articles_vec v
+    JOIN articles a ON a.id = v.rowid
+    WHERE v.embedding MATCH ?
+      AND k = ?
+    ORDER BY v.distance
+"""
+
+
+def _content_snippet(content: str, max_len: int = 200) -> str:
+    for line in (content or "").splitlines():
+        line = line.strip()
+        if line and not line.startswith(("#", "-", "*", "|", ">")):
+            return line[:max_len]
+    return (content or "")[:max_len]
+
+
+def run_semantic_query(
+    vault_root: Path,
+    query: str,
+    limit: int = 20,
+) -> list[SearchResult]:
+    embedder = Embedder()
+    vector = embedder.embed(query)
+    blob = serialize_vector(vector)
+
+    with contextlib.closing(get_connection(vault_root)) as db:
+        load_sqlite_vec(db)
+        try:
+            rows = db.execute(_SEMANTIC_SQL, (blob, limit)).fetchall()
+        except sqlite3.OperationalError as err:
+            raise ValueError(str(err)) from err
+
+    return [
+        SearchResult(
+            rank=round(row["distance"], 6),
+            path=row["path"],
+            title=row["title"] or "",
+            tags=row["tags"] or "",
+            updated=row["updated"] or "",
+            snippet=_content_snippet(row["content"]),
+        )
+        for row in rows
+    ]
 
 
 def run_query(
@@ -92,10 +147,11 @@ def run_query(
 @click.option("--tag", default=None, help="Filter by tag (substring match)")
 @click.option("--dir", "directory", default=None, help="Filter by path prefix")
 @click.option("--limit", default=20, show_default=True, type=click.IntRange(1, 100), help="Max results (1–100)")
+@click.option("--semantic", is_flag=True, default=False, help="Semantic vector search. Run 'search embed' first to generate embeddings.")
 @click.option("--json", "as_json", is_flag=True, help="Print results as JSON to stdout")
 @click.option("-o", "--output", type=click.Path(dir_okay=False, path_type=Path), default=None, help="Write JSON results to file")
 @click.pass_context
-def query_cmd(ctx: click.Context, query: str, tag: str | None, directory: str | None, limit: int, as_json: bool, output: Path | None) -> None:
+def query_cmd(ctx: click.Context, query: str, tag: str | None, directory: str | None, limit: int, semantic: bool, as_json: bool, output: Path | None) -> None:
     vault_root = ctx.obj.get("vault_root")
     if not vault_root:
         logger.error("Vault root path not provided in context")
@@ -110,14 +166,21 @@ def query_cmd(ctx: click.Context, query: str, tag: str | None, directory: str | 
         logger.error("No index found. Run 'wikiform search index' first.")
         raise SystemExit(1)
 
-    logger.debug("FTS query: {!r}", query)
-
-    try:
-        results = run_query(root, query, tag=tag, directory=directory, limit=limit)
-    except ValueError as err:
-        logger.error("Search error: {}", err)
-        logger.info("Try simplifying your query.")
-        raise SystemExit(1) from err
+    if semantic:
+        logger.debug("Semantic query: {!r}", query)
+        try:
+            results = run_semantic_query(root, query, limit=limit)
+        except ValueError as err:
+            logger.error("Search error: {}", err)
+            raise SystemExit(1) from err
+    else:
+        logger.debug("FTS query: {!r}", query)
+        try:
+            results = run_query(root, query, tag=tag, directory=directory, limit=limit)
+        except ValueError as err:
+            logger.error("Search error: {}", err)
+            logger.info("Try simplifying your query.")
+            raise SystemExit(1) from err
 
     logger.debug("Found {} result(s)", len(results))
 
