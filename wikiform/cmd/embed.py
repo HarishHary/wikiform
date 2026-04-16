@@ -23,6 +23,7 @@ class EmbedResult:
     generated_at: str
     embedded: int
     skipped: int
+    deleted: int
     total: int
 
 
@@ -31,6 +32,7 @@ def run_embed(vault_root: Path, model: str, incremental: bool, reset: bool) -> E
     embedder = Embedder(model)
     embedded = 0
     skipped = 0
+    deleted = 0
 
     with contextlib.closing(get_connection(vault_root)) as db:
         load_sqlite_vec(db)
@@ -38,7 +40,7 @@ def run_embed(vault_root: Path, model: str, incremental: bool, reset: bool) -> E
             drop_vec_table(db)
         init_vec_table(db)
 
-        articles = db.execute("SELECT id, title, tags, content FROM articles").fetchall()
+        articles = db.execute("SELECT id, path, title, tags, content FROM articles").fetchall()
         total = len(articles)
 
         if incremental:
@@ -54,8 +56,15 @@ def run_embed(vault_root: Path, model: str, incremental: bool, reset: bool) -> E
             text = f"{row['title'] or ''}. {row['tags'] or ''}. {row['content'] or ''}"
             vector = embedder.embed(text)
             upsert_vec(db, row["id"], vector)
-            logger.debug("Embedded article id={}", row["id"])
+            logger.debug("Embedded: {}", row["path"])
             embedded += 1
+
+        article_ids = {row["id"] for row in articles}
+        vec_ids = {r[0] for r in db.execute("SELECT rowid FROM articles_vec").fetchall()}
+        for stale_id in vec_ids - article_ids:
+            db.execute("DELETE FROM articles_vec WHERE rowid = ?", (stale_id,))
+            logger.debug("Removed stale vector id={}", stale_id)
+            deleted += 1
 
         db.commit()
 
@@ -65,6 +74,7 @@ def run_embed(vault_root: Path, model: str, incremental: bool, reset: bool) -> E
         generated_at=now,
         embedded=embedded,
         skipped=skipped,
+        deleted=deleted,
         total=total,
     )
 
@@ -87,7 +97,7 @@ def embed_cmd(ctx: click.Context, model: str, incremental: bool, reset: bool, ou
         raise SystemExit(2)
 
     result = run_embed(root, model=model, incremental=incremental, reset=reset)
-    logger.info("Embedded: {}  Skipped: {}  Total: {}", result.embedded, result.skipped, result.total)
+    logger.info("Embedded: {}  Skipped: {}  Deleted: {}  Total: {}", result.embedded, result.skipped, result.deleted, result.total)
 
     rendered = json.dumps(asdict(result), indent=2, ensure_ascii=False)
     if output:

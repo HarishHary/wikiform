@@ -1,6 +1,12 @@
 from __future__ import annotations
 
+import logging
+
 from sentence_transformers import SentenceTransformer
+
+logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
+logging.getLogger("transformers").setLevel(logging.ERROR)
+logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
 
 DEFAULT_MODEL = "BAAI/bge-base-en-v1.5"
 EMBEDDING_DIM = 768

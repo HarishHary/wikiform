@@ -142,7 +142,7 @@ def run_query(
     ]
 
 
-@click.command("query")
+@click.command("query", help="Search indexed wiki pages. Defaults to FTS5 keyword search; use --semantic for vector search (run 'search embed' first).")
 @click.argument("query")
 @click.option("--tag", default=None, help="Filter by tag (substring match)")
 @click.option("--dir", "directory", default=None, help="Filter by path prefix")

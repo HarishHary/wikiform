@@ -59,7 +59,7 @@ def cli(ctx: click.Context, logging_file: str | None, verbose: bool, vault_root:
     logging.captureWarnings(True)
 
 
-@cli.group("search", help="Full-text search: build fts-index, query, and serve.")
+@cli.group("search", help="Index, embed, query, and serve wiki search (FTS5 + semantic vector search).")
 def search_group() -> None:
     """Search subcommands."""
 

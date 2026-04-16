@@ -10,7 +10,7 @@ import click
 from loguru import logger
 
 from wikiform.utils.db import get_connection, init_db
-from wikiform.utils.fs import collect_md_files, load_frontmatter, normalize_rel, normalize_tags
+from wikiform.utils.fs import collect_pages, load_frontmatter, normalize_rel, normalize_tags
 
 logger = logger.bind(service="Wikiform - FTS Index")
 
@@ -58,7 +58,7 @@ def run_fts_index(vault_root: Path, incremental: bool) -> FtsIndexResult:
     with contextlib.closing(get_connection(vault_root)) as db:
         init_db(db)
 
-        for md_file in collect_md_files(vault_root):
+        for md_file in collect_pages(vault_root / "wiki" / "pages"):
             rel_path = normalize_rel(md_file, vault_root)
             current_files.add(rel_path)
 

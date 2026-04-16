@@ -36,15 +36,20 @@ def handles(*extensions: str):
 @handles(".pdf")
 class PDFExtractor:
     def __init__(self) -> None:
-        try:
-            subprocess.run(["java", "-version"], capture_output=True, timeout=5, check=True)
-            self._java_available = True
-        except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
-            self._java_available = False
-            logger.warning("Java not found — PDF extraction will use markitdown fallback")
+        self._java_available: bool | None = None
+
+    def _check_java(self) -> bool:
+        if self._java_available is None:
+            try:
+                subprocess.run(["java", "-version"], capture_output=True, timeout=5, check=True)
+                self._java_available = True
+            except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
+                self._java_available = False
+                logger.warning("Java not found — PDF extraction will use markitdown fallback")
+        return self._java_available
 
     def extract(self, path: Path) -> str:
-        if self._java_available:
+        if self._check_java():
             buf = io.StringIO()
             with contextlib.redirect_stdout(buf):
                 opendataloader_pdf.convert(

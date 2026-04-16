@@ -431,7 +431,7 @@ def run_lint(
 
 # ─── CLI command ─────────────────────────────────────────────────────────────
 
-@click.command("lint")
+@click.command("lint", help="Audit the vault for structural issues: broken links, missing frontmatter, orphans, stale raw files, naming, and cross-references.")
 @click.option("--pages-dir", default=None, help="Pages directory (default: <vault-root>/wiki/pages)")
 @click.option("-c", "--check", "check_name", default=None, help="Run only one named check")
 @click.option("-o", "--output", type=click.Path(dir_okay=False, path_type=Path), default=None, help="Write JSON report to file instead of stdout")

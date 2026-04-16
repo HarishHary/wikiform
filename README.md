@@ -5,16 +5,14 @@ LLM-backed wiki management CLI. Extract sources, index, lint, and search an Obsi
 ## Installation
 
 ```bash
-poetry install
-```
-
-For the web search UI:
-
-```bash
-poetry install --with serve
+poetry install                 # all core deps (includes search, embeddings, extraction)
+poetry install --with serve    # add FastAPI/uvicorn for the web UI
+poetry install --only dev      # dev tools only (lint, test, etc.)
 ```
 
 > **PDF extraction** uses `opendataloader-pdf` and requires a Java runtime. If Java is not installed, extraction falls back to `markitdown` automatically.
+
+> **Semantic search** (sqlite-vec) requires Python compiled with `--enable-loadable-sqlite-extensions`. See the [Semantic Search](#semantic-search) section for setup.
 
 ## Commands
 

@@ -94,7 +94,7 @@ def build_app(vault_root: Path) -> FastAPI:
     return app
 
 
-@click.command("serve")
+@click.command("serve", help="Start the FastAPI web UI for browsing and searching the vault (default: http://127.0.0.1:8787).")
 @click.option("--port", default=8787, show_default=True, help="Port for web UI")
 @click.option("--host", default="127.0.0.1", show_default=True, help="Host to bind (default: localhost only)")
 @click.pass_context

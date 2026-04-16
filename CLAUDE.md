@@ -33,6 +33,12 @@ make black   # runs black diff
 # Build
 make build   # poetry build → dist/
 make install # build + pip install wheel
+
+# Search workflow (must run in order)
+wikiform --vault-root PATH search index        # build FTS5 index from wiki/pages/
+wikiform --vault-root PATH search embed        # generate vector embeddings
+wikiform --vault-root PATH search query "..."  # keyword search
+wikiform --vault-root PATH search query "..." --semantic  # vector search
 ```
 
 ## Architecture
@@ -68,12 +74,12 @@ Wikiform is a Python CLI (`wikiform/cli.py`) for managing Obsidian-style markdow
     images/             ← images (.png .jpg .svg)
     misc/               ← binary or unrecognised types
   _meta/
-    vault-search.db     ← FTS5 SQLite database
+    vault-search.db     ← SQLite database: articles (FTS5) + articles_vec (sqlite-vec 768-dim)
 ```
 
 ### Utilities (`wikiform/utils/`)
 
-- **`fs.py`** - file collection (`collect_pages`, `collect_vault_files`, `collect_md_files`), frontmatter parsing (`load_frontmatter`), tag normalization, wikilink extraction (`extract_wikilinks`). `collect_pages` is flat (pages only); `collect_vault_files` covers pages + raw + wiki top-level for linting; `collect_md_files` is vault-wide for search indexing.
+- **`fs.py`** - file collection (`collect_pages`, `collect_vault_files`, `collect_md_files`), frontmatter parsing (`load_frontmatter`), tag normalization, wikilink extraction (`extract_wikilinks`). `collect_pages(pages_dir)` is flat (pages only) — used by `search index`; `collect_vault_files` covers pages + raw + wiki top-level for linting; `collect_md_files` is vault-wide (unused by search index but available).
 - **`config.py`** - reads `SCHEMA.md` via regex to extract `## Index Categories` (ordered list) and `## Wiki Page Frontmatter` yaml block (required fields). Falls back to `DEFAULT_REQUIRED_FIELDS = {title, tags, updated}` if absent.
 - **`db.py`** - SQLite helpers; `init_db` creates the `articles` table and `articles_fts` virtual FTS5 table (porter + unicode61 tokenizer, content-table mode synced via triggers). BM25 weights: title 5.0, tags 2.0, content 1.0. `sanitize_fts_query` quotes hyphenated tokens to prevent FTS5 parsing them as NOT operators.
 - **`extractor.py`** - file-to-text extraction; `@handles(*extensions)` decorator self-registers extractor classes into a module-level registry. `PDFExtractor` uses `opendataloader-pdf` (requires Java) with automatic fallback to `markitdown` when Java is absent. All other supported formats use `MarkItDownExtractor`. Unrecognised types fall back to `BinaryExtractor` (returns size metadata). Public API: `extract_text(path) -> str`.
