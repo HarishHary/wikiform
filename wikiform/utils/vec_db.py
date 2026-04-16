@@ -5,13 +5,18 @@ import struct
 
 import sqlite_vec
 
-EMBEDDING_DIM = 384
+EMBEDDING_DIM = 768
 
 
 def load_sqlite_vec(db: sqlite3.Connection) -> None:
     db.enable_load_extension(True)
     sqlite_vec.load(db)
     db.enable_load_extension(False)
+
+
+def drop_vec_table(db: sqlite3.Connection) -> None:
+    db.execute("DROP TABLE IF EXISTS articles_vec")
+    db.commit()
 
 
 def init_vec_table(db: sqlite3.Connection, dims: int = EMBEDDING_DIM) -> None:

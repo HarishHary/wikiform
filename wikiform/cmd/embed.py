@@ -11,7 +11,7 @@ from loguru import logger
 
 from wikiform.utils.db import get_connection
 from wikiform.utils.embedder import DEFAULT_MODEL, Embedder
-from wikiform.utils.vec_db import init_vec_table, load_sqlite_vec, upsert_vec
+from wikiform.utils.vec_db import drop_vec_table, init_vec_table, load_sqlite_vec, upsert_vec
 
 logger = logger.bind(service="Wikiform - Embed")
 
@@ -26,7 +26,7 @@ class EmbedResult:
     total: int
 
 
-def run_embed(vault_root: Path, model: str, incremental: bool) -> EmbedResult:
+def run_embed(vault_root: Path, model: str, incremental: bool, reset: bool) -> EmbedResult:
     now = datetime.now(timezone.utc).isoformat()
     embedder = Embedder(model)
     embedded = 0
@@ -34,6 +34,8 @@ def run_embed(vault_root: Path, model: str, incremental: bool) -> EmbedResult:
 
     with contextlib.closing(get_connection(vault_root)) as db:
         load_sqlite_vec(db)
+        if reset:
+            drop_vec_table(db)
         init_vec_table(db)
 
         articles = db.execute("SELECT id, title, tags, content FROM articles").fetchall()
@@ -70,9 +72,10 @@ def run_embed(vault_root: Path, model: str, incremental: bool) -> EmbedResult:
 @click.command("embed", help="Generate vector embeddings for all indexed articles. Run 'search index' first.")
 @click.option("--model", default=DEFAULT_MODEL, show_default=True, help="Sentence-transformers model name.")
 @click.option("--incremental", is_flag=True, default=False, help="Skip articles already embedded.")
+@click.option("--reset", is_flag=True, default=False, help="Drop and recreate the vector table before embedding. Required when changing models.")
 @click.option("-o", "--output", type=click.Path(dir_okay=False, path_type=Path), default=None, help="Write JSON report to file instead of stdout.")
 @click.pass_context
-def embed_cmd(ctx: click.Context, model: str, incremental: bool, output: Path | None) -> None:
+def embed_cmd(ctx: click.Context, model: str, incremental: bool, reset: bool, output: Path | None) -> None:
     vault_root = ctx.obj.get("vault_root")
     if not vault_root:
         logger.error("Vault root path not provided in context")
@@ -83,7 +86,7 @@ def embed_cmd(ctx: click.Context, model: str, incremental: bool, output: Path | 
         logger.error("Vault root does not exist: {}", root)
         raise SystemExit(2)
 
-    result = run_embed(root, model=model, incremental=incremental)
+    result = run_embed(root, model=model, incremental=incremental, reset=reset)
     logger.info("Embedded: {}  Skipped: {}  Total: {}", result.embedded, result.skipped, result.total)
 
     rendered = json.dumps(asdict(result), indent=2, ensure_ascii=False)

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from sentence_transformers import SentenceTransformer
 
-DEFAULT_MODEL = "all-MiniLM-L6-v2"
-EMBEDDING_DIM = 384
+DEFAULT_MODEL = "BAAI/bge-base-en-v1.5"
+EMBEDDING_DIM = 768
 
 
 class Embedder:

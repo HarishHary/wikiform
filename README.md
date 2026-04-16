@@ -36,10 +36,16 @@ wikiform lint --vault-root PATH --output report.json
 wikiform search index --vault-root PATH
 wikiform search index --vault-root PATH --incremental
 
+# Generate vector embeddings for semantic search
+wikiform search embed --vault-root PATH
+wikiform search embed --vault-root PATH --reset   # drop and recreate (required when switching models)
+wikiform search embed --vault-root PATH --incremental  # skip already-embedded articles
+
 # Search the vault
 wikiform search query "multi-head attention" --vault-root PATH
 wikiform search query "transformer" --vault-root PATH --tag Concepts --limit 10
 wikiform search query "transformer" --vault-root PATH --json
+wikiform search query "anomaly detection techniques" --vault-root PATH --semantic  # vector search
 
 # Start the web UI
 wikiform search serve --vault-root PATH --port 8787
@@ -62,7 +68,7 @@ wikiform search serve --vault-root PATH --port 8787
     images/             ← images (.png .jpg .svg)
     misc/               ← binary or unrecognised types
   _meta/
-    vault-search.db     ← FTS5 search index
+    vault-search.db     ← FTS5 + vector search index (sqlite-vec)
 ```
 
 ## Supported File Types for `extract`
@@ -75,3 +81,23 @@ wikiform search serve --vault-root PATH --port 8787
 | PDF | `.pdf` (Java required for opendataloader-pdf; falls back to markitdown) |
 | PowerPoint | `.pptx` |
 | Binary | Size metadata only, no text extraction |
+
+## Semantic Search
+
+Wikiform supports local vector search alongside FTS5 keyword search, powered by [sqlite-vec](https://github.com/asg017/sqlite-vec) and [sentence-transformers](https://www.sbert.net/).
+
+**Default model:** `BAAI/bge-base-en-v1.5` (768-dim, 512-token limit)
+
+```bash
+# One-time setup: build the FTS index, then generate embeddings
+wikiform search index --vault-root PATH
+wikiform search embed --vault-root PATH
+
+# Query with semantic search
+wikiform search query "detection engineering workflow" --vault-root PATH --semantic
+```
+
+> **Note:** sqlite-vec requires Python compiled with `--enable-loadable-sqlite-extensions`. If you see `AttributeError: 'sqlite3.Connection' object has no attribute 'enable_load_extension'`, rebuild your Python:
+> ```bash
+> PYTHON_CONFIGURE_OPTS="--enable-loadable-sqlite-extensions" pyenv install 3.14.0 --force
+> ```
