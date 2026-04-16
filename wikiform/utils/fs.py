@@ -89,8 +89,8 @@ def load_frontmatter(path: Path) -> tuple[dict[str, Any], str]:
     try:
         parsed = frontmatter.load(str(path))
         return dict(parsed.metadata or {}), parsed.content or ""
-    except Exception as exc:
-        logger.warning("Failed to parse frontmatter for {}: {}", path.name, exc)
+    except Exception as err:
+        logger.warning("Failed to parse frontmatter for {}: {}", path.name, err)
         try:
             body = path.read_text(encoding="utf-8", errors="replace")
         except Exception as read_exc:

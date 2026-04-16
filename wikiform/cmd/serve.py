@@ -87,8 +87,8 @@ def build_app(vault_root: Path) -> FastAPI:
     async def api_search(q: str, limit: int = Query(default=20, ge=1, le=100)) -> list[SearchResult]:
         try:
             return run_query(vault_root, q, limit=limit)
-        except ValueError as exc:
-            logger.warning("Search error for query {!r}: {}", q, exc)
+        except ValueError as err:
+            logger.warning("Search error for query {!r}: {}", q, err)
             return []
 
     return app

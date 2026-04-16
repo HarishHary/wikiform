@@ -5,20 +5,20 @@ import re
 from collections import Counter, defaultdict
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal, cast
 
 import click
 from loguru import logger
 
+from wikiform.utils.config import read_schema_required_fields
 from wikiform.utils.fs import (
     collect_vault_files,
     extract_wikilinks,
     load_frontmatter,
     normalize_rel,
 )
-from wikiform.utils.config import read_schema_required_fields
 
 logger = logger.bind(service="Wikiform - Lint")
 
@@ -93,8 +93,8 @@ def _collect_files(vault_root: Path) -> dict[str, FileInfo]:
             stat = md_file.stat()
             size = stat.st_size
             mtime = stat.st_mtime
-        except OSError as exc:
-            logger.warning("Failed to stat {}: {}", rel_str, exc)
+        except OSError as err:
+            logger.warning("Failed to stat {}: {}", rel_str, err)
             size = 0
             mtime = 0.0
 
@@ -258,7 +258,7 @@ class Linter:
         return issues
 
     def check_stale_raw(self) -> list[Issue]:
-        cutoff = datetime.now(timezone.utc).timestamp() - _STALE_RAW_DAYS * _SECONDS_PER_DAY
+        cutoff = datetime.now(UTC).timestamp() - _STALE_RAW_DAYS * _SECONDS_PER_DAY
         issues: list[Issue] = []
         for path, info in self.files.items():
             if not path.startswith("raw/"):
@@ -408,7 +408,7 @@ def run_lint(
         errors=errors,
         warnings=warnings,
         infos=infos,
-        generated_at=datetime.now(timezone.utc).isoformat(),
+        generated_at=datetime.now(UTC).isoformat(),
         overall_health=_compute_health(errors, warnings),
     )
 
@@ -452,9 +452,9 @@ def lint_cmd(ctx: click.Context, pages_dir: str | None, check_name: str | None, 
 
     try:
         report = run_lint(root, actual_pages_dir, check_name)
-    except ValueError as exc:
-        logger.error(str(exc))
-        raise SystemExit(2)
+    except ValueError as err:
+        logger.error(str(err))
+        raise SystemExit(2) from err
 
     rendered = json.dumps(asdict(report), indent=2, ensure_ascii=False)
 

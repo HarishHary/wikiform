@@ -3,7 +3,7 @@ from __future__ import annotations
 import contextlib
 import json
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import click
@@ -49,7 +49,7 @@ def _parse_md(filepath: Path) -> ParsedMd:
 
 
 def run_fts_index(vault_root: Path, incremental: bool) -> FtsIndexResult:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     indexed = 0
     skipped = 0
     deleted = 0

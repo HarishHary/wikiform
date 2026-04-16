@@ -3,19 +3,19 @@ from __future__ import annotations
 import json
 from collections import defaultdict
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import click
 from loguru import logger
 
+from wikiform.utils.config import read_schema_categories
 from wikiform.utils.fs import (
     collect_pages,
     extract_summary,
     load_frontmatter,
     normalize_tags,
 )
-from wikiform.utils.config import read_schema_categories
 
 logger = logger.bind(service="Wikiform - Index")
 
@@ -44,7 +44,7 @@ class IndexResult:
 
 
 def _today_str() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    return datetime.now(UTC).strftime("%Y-%m-%d")
 
 
 def _collect_articles(pages_dir: Path) -> list[Article]:
@@ -215,7 +215,7 @@ def run_index(vault_root: Path) -> IndexResult:
     return IndexResult(
         vault_root=str(vault_root),
         pages_dir=str(pages_dir),
-        generated_at=datetime.now(timezone.utc).isoformat(),
+        generated_at=datetime.now(UTC).isoformat(),
         articles_scanned=len(articles),
         category_index_path=str(category_index_path),
         master_index_path=str(master_index_path),

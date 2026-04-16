@@ -5,9 +5,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Development Setup
 
 ```bash
-poetry install                   # core deps only
+poetry install                   # core deps (includes markitdown + opendataloader-pdf)
 poetry install --with serve      # include FastAPI/uvicorn for the web UI
 poetry install --only dev        # dev tools only (lint, test, etc.)
+
+# PDF extraction via opendataloader-pdf requires a Java runtime.
+# If Java is absent, extraction falls back to markitdown automatically.
 ```
 
 ## Common Commands
@@ -40,6 +43,7 @@ Wikiform is a Python CLI (`wikiform/cli.py`) for managing Obsidian-style markdow
 
 | Command        | File               | Purpose                                                                                         |
 | -------------- | ------------------ | ----------------------------------------------------------------------------------------------- |
+| `extract`      | `cmd/extract.py`   | Extract any source file to `raw/<subdir>/<slug>.md` with frontmatter, ready for wiki-ingest    |
 | `index`        | `cmd/index.py`     | Regenerates `wiki/index.md`, `wiki/master-index.md`, `wiki/tag-index.md` from `wiki/pages/*.md` |
 | `lint`         | `cmd/lint.py`      | Runs structural checks on the vault (broken links, frontmatter, orphans, naming, etc.)          |
 | `search index` | `cmd/fts_index.py` | Builds/updates the FTS5 SQLite search index                                                     |
@@ -56,11 +60,14 @@ Wikiform is a Python CLI (`wikiform/cli.py`) for managing Obsidian-style markdow
     index.md            ← auto-generated (category index)
     master-index.md     ← auto-generated (alphabetical)
     tag-index.md        ← auto-generated (by tag)
-  raw/                  ← ingestion sources (recursive *.md)
+  raw/
+    papers/             ← documents (.pdf .md .txt .docx .pptx)
+    datasets/           ← data files (.csv .json .yaml .xlsx)
+    code/               ← source files (.py .js .ts .sql .sh etc.)
+    images/             ← images (.png .jpg .svg)
+    misc/               ← binary or unrecognised types
   _meta/
-    vault-search.db      ← FTS5 SQLite database
-    _wiki_state.json     ← ingest extraction state (file content hashes; gitignored)
-    _wiki_llm_cache.json ← LLM response cache, keyed by content-hash:model (gitignored)
+    vault-search.db     ← FTS5 SQLite database
 ```
 
 ### Utilities (`wikiform/utils/`)
@@ -68,6 +75,7 @@ Wikiform is a Python CLI (`wikiform/cli.py`) for managing Obsidian-style markdow
 - **`fs.py`** - file collection (`collect_pages`, `collect_vault_files`, `collect_md_files`), frontmatter parsing (`load_frontmatter`), tag normalization, wikilink extraction (`extract_wikilinks`). `collect_pages` is flat (pages only); `collect_vault_files` covers pages + raw + wiki top-level for linting; `collect_md_files` is vault-wide for search indexing.
 - **`config.py`** - reads `SCHEMA.md` via regex to extract `## Index Categories` (ordered list) and `## Wiki Page Frontmatter` yaml block (required fields). Falls back to `DEFAULT_REQUIRED_FIELDS = {title, tags, updated}` if absent.
 - **`db.py`** - SQLite helpers; `init_db` creates the `articles` table and `articles_fts` virtual FTS5 table (porter + unicode61 tokenizer, content-table mode synced via triggers). BM25 weights: title 5.0, tags 2.0, content 1.0. `sanitize_fts_query` quotes hyphenated tokens to prevent FTS5 parsing them as NOT operators.
+- **`extractor.py`** - file-to-text extraction; `@handles(*extensions)` decorator self-registers extractor classes into a module-level registry. `PDFExtractor` uses `opendataloader-pdf` (requires Java) with automatic fallback to `markitdown` when Java is absent. All other supported formats use `MarkItDownExtractor`. Unrecognised types fall back to `BinaryExtractor` (returns size metadata). Public API: `extract_text(path) -> str`.
 
 ### Lint Checks
 

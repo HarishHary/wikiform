@@ -6,7 +6,6 @@ from pathlib import Path
 
 from loguru import logger
 
-
 logger = logger.bind(service="Wikiform - Config")
 # Required frontmatter fields when SCHEMA.md has no parseable block.
 DEFAULT_REQUIRED_FIELDS: frozenset[str] = frozenset({"title", "tags", "updated"})

@@ -1,6 +1,6 @@
 # Wikiform
 
-LLM-backed wiki
+LLM-backed wiki management CLI. Extract sources, index, lint, and search an Obsidian-style markdown vault.
 
 ## Installation
 
@@ -14,9 +14,16 @@ For the web search UI:
 poetry install --with serve
 ```
 
+> **PDF extraction** uses `opendataloader-pdf` and requires a Java runtime. If Java is not installed, extraction falls back to `markitdown` automatically.
+
 ## Commands
 
 ```bash
+# Extract a source file into raw/ ready for wiki-ingest
+wikiform extract path/to/file.pdf --vault-root PATH
+wikiform extract path/to/report.docx --vault-root PATH
+wikiform extract path/to/data.xlsx --vault-root PATH --overwrite
+
 # Regenerate all three index files
 wikiform index --vault-root PATH
 
@@ -37,3 +44,34 @@ wikiform search query "transformer" --vault-root PATH --json
 # Start the web UI
 wikiform search serve --vault-root PATH --port 8787
 ```
+
+## Vault Layout
+
+```
+{vault_root}/
+  SCHEMA.md             ← categories and required frontmatter fields
+  wiki/
+    pages/              ← wiki articles (kebab-case slugs)
+    index.md            ← auto-generated
+    master-index.md     ← auto-generated
+    tag-index.md        ← auto-generated
+  raw/
+    papers/             ← documents (.pdf .md .txt .docx .pptx)
+    datasets/           ← data files (.csv .json .yaml .xlsx)
+    code/               ← source files (.py .js .ts .sql etc.)
+    images/             ← images (.png .jpg .svg)
+    misc/               ← binary or unrecognised types
+  _meta/
+    vault-search.db     ← FTS5 search index
+```
+
+## Supported File Types for `extract`
+
+| Type | Extensions |
+|------|------------|
+| Plain text / code | `.txt .md .py .sql .js .ts .csv .json .yaml .html .xml .sh` and more |
+| Word | `.docx .dotx` |
+| Excel | `.xlsx .xltx` |
+| PDF | `.pdf` (Java required for opendataloader-pdf; falls back to markitdown) |
+| PowerPoint | `.pptx` |
+| Binary | Size metadata only, no text extraction |

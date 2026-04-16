@@ -71,8 +71,8 @@ def run_query(
     with contextlib.closing(get_connection(vault_root)) as db:
         try:
             rows = db.execute(sql, params).fetchall()
-        except sqlite3.OperationalError as exc:
-            raise ValueError(str(exc)) from exc
+        except sqlite3.OperationalError as err:
+            raise ValueError(str(err)) from err
 
     return [
         SearchResult(
@@ -114,10 +114,10 @@ def query_cmd(ctx: click.Context, query: str, tag: str | None, directory: str | 
 
     try:
         results = run_query(root, query, tag=tag, directory=directory, limit=limit)
-    except ValueError as exc:
-        logger.error("Search error: {}", exc)
+    except ValueError as err:
+        logger.error("Search error: {}", err)
         logger.info("Try simplifying your query.")
-        raise SystemExit(1)
+        raise SystemExit(1) from err
 
     logger.debug("Found {} result(s)", len(results))
 
