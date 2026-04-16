@@ -38,13 +38,13 @@ Wikiform is a Python CLI (`wikiform/cli.py`) for managing Obsidian-style markdow
 
 ### Commands (`wikiform/cmd/`)
 
-| Command | File | Purpose |
-|---|---|---|
-| `index` | `cmd/index.py` | Regenerates `wiki/index.md`, `wiki/master-index.md`, `wiki/tag-index.md` from `wiki/pages/*.md` |
-| `lint` | `cmd/lint.py` | Runs structural checks on the vault (broken links, frontmatter, orphans, naming, etc.) |
-| `build-search-index` | `cmd/build_search_index.py` | Builds/updates the FTS5 SQLite search index |
-| `query` | `cmd/query.py` | Searches via FTS5, renders results with Rich |
-| `serve` | `cmd/serve.py` | FastAPI + uvicorn web UI at port 8787 |
+| Command              | File                        | Purpose                                                                                         |
+| -------------------- | --------------------------- | ----------------------------------------------------------------------------------------------- |
+| `index`              | `cmd/index.py`              | Regenerates `wiki/index.md`, `wiki/master-index.md`, `wiki/tag-index.md` from `wiki/pages/*.md` |
+| `lint`               | `cmd/lint.py`               | Runs structural checks on the vault (broken links, frontmatter, orphans, naming, etc.)          |
+| `build-search-index` | `cmd/build_search_index.py` | Builds/updates the FTS5 SQLite search index                                                     |
+| `query`              | `cmd/query.py`              | Searches via FTS5, renders results with Rich                                                    |
+| `serve`              | `cmd/serve.py`              | FastAPI + uvicorn web UI at port 8787                                                           |
 
 ### Vault Directory Layout Expected
 
@@ -57,15 +57,15 @@ Wikiform is a Python CLI (`wikiform/cli.py`) for managing Obsidian-style markdow
     master-index.md     ← auto-generated (alphabetical)
     tag-index.md        ← auto-generated (by tag)
   raw/                  ← ingestion sources (recursive *.md)
-  scripts/
+  _meta/
     vault-search.db     ← FTS5 SQLite database
 ```
 
 ### Utilities (`wikiform/utils/`)
 
-- **`fs.py`** — file collection (`collect_pages`, `collect_vault_files`, `collect_md_files`), frontmatter parsing (`load_frontmatter`), tag normalization, wikilink extraction (`extract_wikilinks`). `collect_pages` is flat (pages only); `collect_vault_files` covers pages + raw + wiki top-level for linting; `collect_md_files` is vault-wide for search indexing.
-- **`config.py`** — reads `SCHEMA.md` via regex to extract `## Index Categories` (ordered list) and `## Wiki Page Frontmatter` yaml block (required fields). Falls back to `DEFAULT_REQUIRED_FIELDS = {title, tags, updated}` if absent.
-- **`db.py`** — SQLite helpers; `init_db` creates the `articles` table and `articles_fts` virtual FTS5 table (porter + unicode61 tokenizer, content-table mode synced via triggers). BM25 weights: title 5.0, tags 2.0, content 1.0. `sanitize_fts_query` quotes hyphenated tokens to prevent FTS5 parsing them as NOT operators.
+- **`fs.py`** - file collection (`collect_pages`, `collect_vault_files`, `collect_md_files`), frontmatter parsing (`load_frontmatter`), tag normalization, wikilink extraction (`extract_wikilinks`). `collect_pages` is flat (pages only); `collect_vault_files` covers pages + raw + wiki top-level for linting; `collect_md_files` is vault-wide for search indexing.
+- **`config.py`** - reads `SCHEMA.md` via regex to extract `## Index Categories` (ordered list) and `## Wiki Page Frontmatter` yaml block (required fields). Falls back to `DEFAULT_REQUIRED_FIELDS = {title, tags, updated}` if absent.
+- **`db.py`** - SQLite helpers; `init_db` creates the `articles` table and `articles_fts` virtual FTS5 table (porter + unicode61 tokenizer, content-table mode synced via triggers). BM25 weights: title 5.0, tags 2.0, content 1.0. `sanitize_fts_query` quotes hyphenated tokens to prevent FTS5 parsing them as NOT operators.
 
 ### Lint Checks
 
