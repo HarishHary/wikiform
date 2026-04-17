@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import asdict, dataclass
-from datetime import UTC, date
+from datetime import UTC, date, datetime
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -107,7 +107,6 @@ class ExtractResult:
 
 
 def run_extract_url(url: str, vault_root: Path, overwrite: bool) -> ExtractResult:
-    from datetime import datetime
     now = datetime.now(UTC).isoformat()
 
     title, content = fetch_url(url)
@@ -135,7 +134,6 @@ def run_extract_url(url: str, vault_root: Path, overwrite: bool) -> ExtractResul
 
 
 def run_extract(source: Path, vault_root: Path, overwrite: bool) -> ExtractResult:
-    from datetime import datetime
     now = datetime.now(UTC).isoformat()
 
     ext = source.suffix.lower()

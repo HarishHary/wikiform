@@ -95,7 +95,7 @@ For each page to update, read the current content in full. Then propose changes 
 Page: wiki/pages/<slug>.md
 
 --- current (line <N>)
-<exact current text, including surrounding context of 1–2 lines>
+<exact current text, including surrounding context of 1-2 lines>
 
 +++ proposed
 <replacement text>
@@ -106,7 +106,7 @@ Source: <URL, file path, or description - required; do not omit>
 
 Rules for the diff format:
 - Always include the line number of the change (`line <N>`).
-- Always include 1–2 lines of surrounding context so the location is unambiguous.
+- Always include 1-2 lines of surrounding context so the location is unambiguous.
 - For multi-line replacements, show the full block in both current and proposed sections.
 - For frontmatter changes, show the full frontmatter block in both sections - do not show only the changed field.
 - If a page requires more than 5 separate edits, ask the user whether to proceed page-by-page or rewrite the page wholesale.

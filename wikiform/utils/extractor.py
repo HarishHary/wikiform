@@ -4,8 +4,9 @@ import contextlib
 import io
 import subprocess
 from html.parser import HTMLParser
+from collections.abc import Callable
 from pathlib import Path
-from typing import Protocol, runtime_checkable
+from typing import Protocol, TypeVar, runtime_checkable
 
 import opendataloader_pdf
 import requests
@@ -17,6 +18,7 @@ logger = logger.bind(service="Wikiform - Extractor")
 
 _REGISTRY: dict[str, Extractor] = {}
 _md = MarkItDown()
+_C = TypeVar("_C")
 
 
 class HTMLTextStripper(HTMLParser):
@@ -56,12 +58,12 @@ class Extractor(Protocol):
         ...
 
 
-def handles(*extensions: str):
+def handles(*extensions: str) -> Callable[[type[_C]], type[_C]]:
     """Class decorator that registers an extractor for the given file extensions."""
-    def decorator(cls: type) -> type:
-        instance = cls()
+    def decorator(cls: type[_C]) -> type[_C]:
+        instance = cls()  # type: ignore[call-arg]
         for ext in extensions:
-            _REGISTRY[ext.lower()] = instance
+            _REGISTRY[ext.lower()] = instance  # type: ignore[arg-type]
         return cls
     return decorator
 

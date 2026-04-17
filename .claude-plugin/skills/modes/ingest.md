@@ -687,7 +687,7 @@ The report is the user-facing summary of what the ingestion produced. It must an
 
 **Needs attention**
 
-List any deferred items or errors from steps 8–13 that require user action. If none, omit this section entirely.
+List any deferred items or errors from steps 8-13 that require user action. If none, omit this section entirely.
 
 | Item          | Reason                | Suggested action          |
 | ------------- | --------------------- | ------------------------- |

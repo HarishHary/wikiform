@@ -116,6 +116,7 @@ markitdown = { version = "^0.1.5", extras = [
 opendataloader-pdf = "^2.2.1"
 sqlite-vec = "^0.1.9"
 sentence-transformers = "^5.4.1"
+requests = "^2.33.1"
 trafilatura = "^2.0.0"
 
 [tool.poetry.group.dev.dependencies]

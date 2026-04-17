@@ -146,7 +146,7 @@ def run_query(
 @click.argument("query")
 @click.option("--tag", default=None, help="Filter by tag (substring match)")
 @click.option("--dir", "directory", default=None, help="Filter by path prefix")
-@click.option("--limit", default=20, show_default=True, type=click.IntRange(1, 100), help="Max results (1–100)")
+@click.option("--limit", default=20, show_default=True, type=click.IntRange(1, 100), help="Max results (1-100)")
 @click.option("--semantic", is_flag=True, default=False, help="Semantic vector search. Run 'search embed' first to generate embeddings.")
 @click.option("--json", "as_json", is_flag=True, help="Print results as JSON to stdout")
 @click.option("-o", "--output", type=click.Path(dir_okay=False, path_type=Path), default=None, help="Write JSON results to file")

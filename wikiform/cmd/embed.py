@@ -3,7 +3,7 @@ from __future__ import annotations
 import contextlib
 import json
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import click
@@ -28,7 +28,7 @@ class EmbedResult:
 
 
 def run_embed(vault_root: Path, model: str, incremental: bool, reset: bool) -> EmbedResult:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     embedder = Embedder(model)
     embedded = 0
     skipped = 0
