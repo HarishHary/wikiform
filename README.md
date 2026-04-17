@@ -15,35 +15,37 @@ poetry install --only dev      # dev tools only (lint, test, etc.)
 
 ## Commands
 
+`--vault-root` is a global option and must come before the subcommand.
+
 ```bash
-# Extract a source file into raw/ ready for wiki-ingest
-wikiform extract path/to/file.pdf --vault-root PATH
-wikiform extract path/to/report.docx --vault-root PATH
-wikiform extract path/to/data.xlsx --vault-root PATH --overwrite
+# Extract a source file or URL into raw/ ready for wiki-ingest
+wikiform --vault-root PATH extract path/to/file.pdf
+wikiform --vault-root PATH extract path/to/report.docx
+wikiform --vault-root PATH extract path/to/data.xlsx --overwrite
+wikiform --vault-root PATH extract https://example.com/article
 
 # Regenerate all three index files
-wikiform index --vault-root PATH
+wikiform --vault-root PATH index
 
 # Audit the vault for structural issues
-wikiform lint --vault-root PATH
-wikiform lint --vault-root PATH --check broken_link
-wikiform lint --vault-root PATH --output report.json
+wikiform --vault-root PATH lint
+wikiform --vault-root PATH lint --check broken_link
+wikiform --vault-root PATH lint --output report.json
 
 # Build or update the FTS5 search index
-wikiform search index --vault-root PATH
-wikiform search index --vault-root PATH --incremental
+wikiform --vault-root PATH search index
+wikiform --vault-root PATH search index --incremental       # skip unchanged files
 
 # Generate vector embeddings for semantic search
-wikiform search embed --vault-root PATH
-wikiform search embed --vault-root PATH --reset   # drop and recreate (required when switching models)
-wikiform search embed --vault-root PATH --incremental  # skip already-embedded articles
+wikiform --vault-root PATH search embed
+wikiform --vault-root PATH search embed --incremental       # skip already-embedded articles
+wikiform --vault-root PATH search embed --reset             # drop and recreate (required when switching models)
 
 # Search the vault
-wikiform search query "multi-head attention" --vault-root PATH
-wikiform search query "transformer" --vault-root PATH --tag Concepts --limit 10
-wikiform search query "transformer" --vault-root PATH --json
-wikiform search query "anomaly detection techniques" --vault-root PATH --semantic  # vector search
-
+wikiform --vault-root PATH search query "multi-head attention"
+wikiform --vault-root PATH search query "transformer" --tag Concepts --limit 10
+wikiform --vault-root PATH search query "transformer" --json
+wikiform --vault-root PATH search query "anomaly detection techniques" --semantic  # vector search
 ```
 
 ## Vault Layout
@@ -85,11 +87,11 @@ Wikiform supports local vector search alongside FTS5 keyword search, powered by 
 
 ```bash
 # One-time setup: build the FTS index, then generate embeddings
-wikiform search index --vault-root PATH
-wikiform search embed --vault-root PATH
+wikiform --vault-root PATH search index
+wikiform --vault-root PATH search embed
 
 # Query with semantic search
-wikiform search query "detection engineering workflow" --vault-root PATH --semantic
+wikiform --vault-root PATH search query "detection engineering workflow" --semantic
 ```
 
 > **Note:** sqlite-vec requires Python compiled with `--enable-loadable-sqlite-extensions`. If you see `AttributeError: 'sqlite3.Connection' object has no attribute 'enable_load_extension'`, rebuild your Python:

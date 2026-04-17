@@ -5,8 +5,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Development Setup
 
 ```bash
-poetry install                   # core deps
-poetry install --only dev        # dev tools only (lint, test, etc.)
+poetry install                   # core deps (or: make init)
+poetry install --only dev        # dev tools only (or: make init-dev)
 
 # PDF extraction via opendataloader-pdf requires a Java runtime.
 # If Java is absent, extraction falls back to markitdown automatically.
@@ -30,14 +30,29 @@ make bandit  # runs bandit
 make black   # runs black diff
 
 # Build
-make build   # poetry build → dist/
-make install # build + pip install wheel
+make build     # poetry build → dist/
+make install   # build + pip install wheel
+make uninstall # pip uninstall wikiform
+make clean     # remove dist/, build/, .pytest_cache/, .coverage, etc.
+
+# Extract a file or URL into raw/<subdir>/<slug>.md
+wikiform --vault-root PATH extract path/to/file.pdf
+wikiform --vault-root PATH extract https://example.com/article
+
+# Regenerate wiki/index.md, master-index.md, tag-index.md
+wikiform --vault-root PATH index
+
+# Run all lint checks (or a single one with --check <name>)
+wikiform --vault-root PATH lint
+wikiform --vault-root PATH lint --check broken_link
 
 # Search workflow (must run in order)
-wikiform --vault-root PATH search index        # build FTS5 index from wiki/pages/
-wikiform --vault-root PATH search embed        # generate vector embeddings
-wikiform --vault-root PATH search query "..."  # keyword search
-wikiform --vault-root PATH search query "..." --semantic  # vector search
+wikiform --vault-root PATH search index                     # build FTS5 index from wiki/pages/
+wikiform --vault-root PATH search index --incremental       # skip unchanged files
+wikiform --vault-root PATH search embed                     # generate vector embeddings
+wikiform --vault-root PATH search embed --incremental       # skip already-embedded articles
+wikiform --vault-root PATH search query "..."               # keyword search
+wikiform --vault-root PATH search query "..." --semantic    # vector search
 ```
 
 ## Architecture
@@ -99,6 +114,7 @@ Eight named checks run in `cmd/lint.py`: `broken_link`, `frontmatter`, `orphan`,
   ```
 - **Changing embedding models**: always pass `--reset` to `search embed` — the vec table schema is fixed at creation time with a specific dimension count.
 - **Orphan check exemption**: `raw/` files with `status != ingested` are skipped by the orphan check. Only ingested raw files must have a backlink from their wiki article.
+- **`upsert_vec` does not commit**: it is designed to be called in a loop; the caller (e.g. `run_embed`) owns the `db.commit()` after all rows are processed. Do not add a commit inside `upsert_vec` — it would make bulk embedding ~100x slower.
 
 ### Key Conventions
 
