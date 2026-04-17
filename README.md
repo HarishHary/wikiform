@@ -6,7 +6,6 @@ LLM-backed wiki management CLI. Extract sources, index, lint, and search an Obsi
 
 ```bash
 poetry install                 # all core deps (includes search, embeddings, extraction)
-poetry install --with serve    # add FastAPI/uvicorn for the web UI
 poetry install --only dev      # dev tools only (lint, test, etc.)
 ```
 
@@ -45,8 +44,6 @@ wikiform search query "transformer" --vault-root PATH --tag Concepts --limit 10
 wikiform search query "transformer" --vault-root PATH --json
 wikiform search query "anomaly detection techniques" --vault-root PATH --semantic  # vector search
 
-# Start the web UI
-wikiform search serve --vault-root PATH --port 8787
 ```
 
 ## Vault Layout

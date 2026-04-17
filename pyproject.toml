@@ -106,8 +106,6 @@ click = "^8.1"
 python-frontmatter = "^1.1"
 loguru = "^0.7"
 rich = "^13.0"
-fastapi = "^0.111"
-uvicorn = { version = "^0.29", extras = ["standard"] }
 markitdown = { version = "^0.1.5", extras = [
     "pdf",
     "docx",
@@ -118,6 +116,7 @@ markitdown = { version = "^0.1.5", extras = [
 opendataloader-pdf = "^2.2.1"
 sqlite-vec = "^0.1.9"
 sentence-transformers = "^5.4.1"
+trafilatura = "^2.0.0"
 
 [tool.poetry.group.dev.dependencies]
 bandit = "^1.9.3"

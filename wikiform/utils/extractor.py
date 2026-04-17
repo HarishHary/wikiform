@@ -3,10 +3,13 @@ from __future__ import annotations
 import contextlib
 import io
 import subprocess
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 import opendataloader_pdf
+import requests
+import trafilatura
 from loguru import logger
 from markitdown import MarkItDown
 
@@ -14,6 +17,36 @@ logger = logger.bind(service="Wikiform - Extractor")
 
 _REGISTRY: dict[str, Extractor] = {}
 _md = MarkItDown()
+
+
+class HTMLTextStripper(HTMLParser):
+    """Stdlib HTML parser that skips non-content blocks and collects plain text."""
+    _SKIP_TAGS: frozenset[str] = frozenset({
+        "script", "style", "head", "noscript", "svg", "math",
+        "canvas", "template", "iframe",
+    })
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._skip_depth = 0
+        self._parts: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list) -> None:
+        if tag in self._SKIP_TAGS:
+            self._skip_depth += 1
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in self._SKIP_TAGS and self._skip_depth:
+            self._skip_depth -= 1
+
+    def handle_data(self, data: str) -> None:
+        if not self._skip_depth:
+            text = data.strip()
+            if text:
+                self._parts.append(text)
+
+    def get_text(self) -> str:
+        return "\n".join(self._parts)
 
 
 @runtime_checkable
@@ -62,10 +95,18 @@ class PDFExtractor:
         return _md.convert(str(path)).text_content
 
 
+@handles(".html", ".htm")
+class HTMLExtractor:
+    def extract(self, path: Path) -> str:
+        html = path.read_text(encoding="utf-8", errors="replace")
+        result = trafilatura.extract(html, output_format="markdown", include_tables=True, include_comments=False)
+        return result or _md.convert(str(path)).text_content
+
+
 @handles(
     ".docx", ".dotx", ".xlsx", ".xltx", ".pptx",
     ".txt", ".md", ".py", ".sql", ".js", ".ts", ".csv",
-    ".json", ".yaml", ".yml", ".toml", ".html", ".xml",
+    ".json", ".yaml", ".yml", ".toml", ".xml",
     ".bat", ".ps1", ".sh", ".go", ".rs", ".rb", ".java",
     ".c", ".cpp", ".h", ".epub", ".zip",
 )
@@ -84,3 +125,32 @@ def extract_text(path: Path) -> str:
     """Dispatch to the registered extractor for this file extension."""
     extractor = _REGISTRY.get(path.suffix.lower(), BinaryExtractor())
     return extractor.extract(path)
+
+
+def fetch_url(url: str) -> tuple[str, str]:
+    """Fetch a URL and extract its main content.
+
+    Returns (title, markdown_content). Title falls back to the URL if not found.
+    """
+    response = requests.get(url, timeout=30, headers={"User-Agent": "Mozilla/5.0"})
+    response.raise_for_status()
+    html = response.text
+    metadata = trafilatura.extract_metadata(html)
+    title = (metadata.title if metadata and metadata.title else None) or url
+
+    content = trafilatura.extract(html, output_format="markdown", include_images=True, include_tables=True, include_comments=False, favor_recall=True)
+
+    if not content:
+        content = trafilatura.extract(html, output_format="markdown", include_images=True, include_tables=True, include_comments=False, favor_precision=True)
+
+    if not content:
+        logger.warning("trafilatura returned empty content, falling back to html stripper for {}", url)
+        stripper = HTMLTextStripper()
+        stripper.feed(html)
+        content = stripper.get_text()
+
+    if not content:
+        logger.warning("html stripper returned empty content, falling back to markitdown for {}", url)
+        content = _md.convert(url).text_content
+
+    return title, content or ""
