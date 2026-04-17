@@ -5,11 +5,12 @@ import re
 from dataclasses import asdict, dataclass
 from datetime import UTC, date
 from pathlib import Path
+from urllib.parse import urlparse
 
 import click
 from loguru import logger
 
-from wikiform.utils.extractor import extract_text
+from wikiform.utils.extractor import extract_text, fetch_url
 
 logger = logger.bind(service="Wikiform - Extract")
 
@@ -43,7 +44,8 @@ _ROUTING: dict[str, tuple[str, str]] = {
     ".bat": ("code", "code"),
     ".ps1": ("code", "code"),
     ".xml": ("code", "code"),
-    ".html": ("code", "code"),
+    ".html": ("articles", "article"),
+    ".htm": ("articles", "article"),
     ".png": ("images", "image"),
     ".jpg": ("images", "image"),
     ".jpeg": ("images", "image"),
@@ -67,12 +69,20 @@ def _slugify(stem: str) -> str:
     return slug.strip("-")
 
 
-def _build_markdown(title: str, source_type: str, content: str, lang: str | None) -> str:
+def _url_slug(url: str) -> str:
+    parsed = urlparse(url)
+    stem = Path(parsed.path.rstrip("/")).stem or parsed.netloc
+    return _slugify(stem) or _slugify(parsed.netloc)
+
+
+def _build_markdown(title: str, source_type: str, content: str, lang: str | None, source_url: str | None = None) -> str:
     today = date.today().isoformat()
+    url_line = f"source_url: {source_url}\n" if source_url else ""
     frontmatter = (
         f"---\n"
         f"title: {title}\n"
         f"source_type: {source_type}\n"
+        f"{url_line}"
         f"status: raw\n"
         f"slug: \"\"\n"
         f"ingested_date: \"\"\n"
@@ -94,6 +104,34 @@ class ExtractResult:
     source_type: str
     subdir: str
     generated_at: str
+
+
+def run_extract_url(url: str, vault_root: Path, overwrite: bool) -> ExtractResult:
+    from datetime import datetime
+    now = datetime.now(UTC).isoformat()
+
+    title, content = fetch_url(url)
+    slug = _url_slug(url)
+
+    output_dir = vault_root / "raw" / "articles"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    output_path = output_dir / f"{slug}.md"
+    if output_path.exists() and not overwrite:
+        logger.error("Output already exists: {}. Use --overwrite to replace.", output_path)
+        raise SystemExit(1)
+
+    markdown = _build_markdown(title, "article", content, None, source_url=url)
+    output_path.write_text(markdown, encoding="utf-8")
+    logger.info("Fetched {} → {}", url, output_path)
+
+    return ExtractResult(
+        source=url,
+        output=str(output_path),
+        source_type="article",
+        subdir="articles",
+        generated_at=now,
+    )
 
 
 def run_extract(source: Path, vault_root: Path, overwrite: bool) -> ExtractResult:
@@ -129,12 +167,12 @@ def run_extract(source: Path, vault_root: Path, overwrite: bool) -> ExtractResul
     )
 
 
-@click.command("extract", help="Extract a source file into a raw markdown file ready for wiki-ingest.")
-@click.argument("source", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.command("extract", help="Extract a source file or URL into a raw markdown file ready for wiki-ingest.")
+@click.argument("source")
 @click.option("--overwrite", is_flag=True, default=False, help="Overwrite if output file already exists.")
 @click.option("-o", "--output", type=click.Path(dir_okay=False, path_type=Path), default=None, help="Write JSON report to file instead of stdout.")
 @click.pass_context
-def extract_cmd(ctx: click.Context, source: Path, overwrite: bool, output: Path | None) -> None:
+def extract_cmd(ctx: click.Context, source: str, overwrite: bool, output: Path | None) -> None:
     vault_root = ctx.obj.get("vault_root")
     if not vault_root:
         logger.error("Vault root path not provided in context")
@@ -145,7 +183,14 @@ def extract_cmd(ctx: click.Context, source: Path, overwrite: bool, output: Path 
         logger.error("Vault root does not exist: {}", root)
         raise SystemExit(2)
 
-    result = run_extract(source.resolve(), root, overwrite=overwrite)
+    if source.startswith(("http://", "https://")):
+        result = run_extract_url(source, root, overwrite=overwrite)
+    else:
+        source_path = Path(source)
+        if not source_path.exists():
+            logger.error("File not found: {}", source)
+            raise SystemExit(2)
+        result = run_extract(source_path.resolve(), root, overwrite=overwrite)
 
     rendered = json.dumps(asdict(result), indent=2, ensure_ascii=False)
     if output:

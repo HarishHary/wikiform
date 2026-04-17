@@ -1,0 +1,9 @@
+{
+    "hooks": {
+        "SessionStart": [
+            {
+                "command": "which wikiform || echo 'WIKIFORM_MISSING'"
+            }
+        ]
+    }
+}

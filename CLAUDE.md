@@ -5,8 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Development Setup
 
 ```bash
-poetry install                   # core deps (includes markitdown + opendataloader-pdf)
-poetry install --with serve      # include FastAPI/uvicorn for the web UI
+poetry install                   # core deps
 poetry install --only dev        # dev tools only (lint, test, etc.)
 
 # PDF extraction via opendataloader-pdf requires a Java runtime.
@@ -55,7 +54,6 @@ Wikiform is a Python CLI (`wikiform/cli.py`) for managing Obsidian-style markdow
 | `search index` | `cmd/fts_index.py` | Builds/updates the FTS5 SQLite search index                                                     |
 | `search query` | `cmd/query.py`     | Searches via FTS5 (default) or semantic vector search (`--semantic`)                            |
 | `search embed` | `cmd/embed.py`     | Generate 768-dim vector embeddings (BAAI/bge-base-en-v1.5); use `--reset` when switching models |
-| `search serve` | `cmd/serve.py`     | FastAPI + uvicorn web UI at port 8787                                                           |
 
 ### Vault Directory Layout Expected
 

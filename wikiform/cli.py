@@ -10,7 +10,6 @@ from wikiform.cmd.fts_index import fts_index_cmd
 from wikiform.cmd.index import index_cmd
 from wikiform.cmd.lint import lint_cmd
 from wikiform.cmd.query import query_cmd
-from wikiform.cmd.serve import serve_cmd
 
 # Remove default loguru handler
 logger.remove()
@@ -67,7 +66,6 @@ def search_group() -> None:
 search_group.add_command(fts_index_cmd, name="index")
 search_group.add_command(query_cmd)
 search_group.add_command(embed_cmd)
-search_group.add_command(serve_cmd)
 
 cli.add_command(extract_cmd)
 cli.add_command(index_cmd)

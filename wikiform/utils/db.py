@@ -65,16 +65,26 @@ def sanitize_fts_query(query: str) -> str:
     """
     Sanitize a user query for FTS5 MATCH.
 
-    FTS5 treats hyphens as NOT operators (column-filter syntax).
     Strategy:
-    1. Strip FTS5 special characters: ^ * + ( ) [ ] { } "
-    2. Wrap hyphenated tokens in double quotes so FTS5 treats them as
-       phrase tokens: multi-head → "multi-head"
-    3. Collapse whitespace.
+    - Strip FTS5 special characters except " (^ * + ( ) [ ] { })
+    - Preserve existing quoted phrases as-is
+    - Wrap hyphenated tokens that are NOT already inside quotes so FTS5
+      treats them as phrase tokens: multi-head → "multi-head"
+    - Collapse whitespace
 
-    AND, OR, NOT are preserved - users may use them intentionally.
+    AND, OR, NOT are preserved — users may use them intentionally.
     """
-    sanitized = re.sub(r'[\^*()\[\]{}"+]', " ", query)
-    sanitized = re.sub(r"(\b\w+(?:-\w+)+\b)", r'"\1"', sanitized)
-    sanitized = re.sub(r"\s+", " ", sanitized).strip()
-    return sanitized
+    # Strip special chars except double-quote
+    sanitized = re.sub(r'[\^*()\[\]{}+]', " ", query)
+
+    # Quote hyphenated tokens only outside existing quoted phrases
+    parts = re.split(r'("(?:[^"\\]|\\.)*")', sanitized)
+    result = []
+    for i, part in enumerate(parts):
+        if i % 2 == 1:
+            # Inside an existing quoted phrase — keep as-is
+            result.append(part)
+        else:
+            result.append(re.sub(r"(\b\w+(?:-\w+)+\b)", r'"\1"', part))
+
+    return re.sub(r"\s+", " ", "".join(result)).strip()

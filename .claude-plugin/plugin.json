@@ -1,0 +1,27 @@
+{
+    "name": "wikiform",
+    "version": "0.1.0",
+    "description": "Obsidian-style markdown vault manager — index, search, lint, extract",
+    "author": {
+        "name": "HarishHary",
+        "url": "https://github.com/harishhary/wikiform"
+    },
+    "homepage": "https://github.com/harishhary/wikiform",
+    "repository": "https://github.com/harishhary/wikiform",
+    "license": "MIT",
+    "keywords": [
+        "wiki",
+        "obsidian",
+        "markdown",
+        "vault",
+        "search"
+    ],
+    "skills": "./skills/",
+    "hooks": "./hooks/hooks.json",
+    "userConfig": {
+        "vault_root": {
+            "description": "Absolute path to your vault root (the folder containing SCHEMA.md)",
+            "sensitive": false
+        }
+    }
+}

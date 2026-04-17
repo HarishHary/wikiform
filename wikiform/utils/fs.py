@@ -93,8 +93,8 @@ def load_frontmatter(path: Path) -> tuple[dict[str, Any], str]:
         logger.warning("Failed to parse frontmatter for {}: {}", path.name, err)
         try:
             body = path.read_text(encoding="utf-8", errors="replace")
-        except Exception as read_exc:
-            logger.error("Failed to read {}: {}", path.name, read_exc)
+        except Exception as err:
+            logger.error("Failed to read {}: {}", path.name, err)
             body = ""
         return {}, body
 
@@ -107,9 +107,7 @@ def collect_pages(pages_dir: Path) -> list[Path]:
     if not pages_dir.exists():
         logger.warning("Pages directory does not exist: {}", pages_dir)
         return []
-    return sorted(
-        f for f in pages_dir.glob("*.md") if f.name not in SKIP_FILES
-    )
+    return sorted(f for f in pages_dir.glob("*.md") if f.name not in SKIP_FILES)
 
 
 def collect_vault_files(vault_root: Path) -> list[Path]:
