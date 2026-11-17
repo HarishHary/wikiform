@@ -7,6 +7,7 @@ from loguru import logger
 from wikiform.cmd.embed import embed_cmd
 from wikiform.cmd.extract import extract_cmd
 from wikiform.cmd.fts_index import fts_index_cmd
+from wikiform.cmd.hook import hook_cmd
 from wikiform.cmd.index import index_cmd
 from wikiform.cmd.lint import lint_cmd
 from wikiform.cmd.query import query_cmd
@@ -19,10 +20,10 @@ logger = logger.bind(service="Wikiform - CLI")
 @click.group(invoke_without_command=True)
 @click.version_option()
 @click.option("--logging-file", help="The filepath used for wikiform's logging.")
-@click.option("--vault-root", required=True, help="Vault root path")
+@click.option("--vault-root", help="Vault root path (required by every subcommand)")
 @click.option("-v", "--verbose", default=False, is_flag=True, help="Enable debug verbosity.")
 @click.pass_context
-def cli(ctx: click.Context, logging_file: str | None, verbose: bool, vault_root: str) -> None:
+def cli(ctx: click.Context, logging_file: str | None, verbose: bool, vault_root: str | None) -> None:
     ctx.ensure_object(dict)
     ctx.obj["vault_root"] = vault_root
 
@@ -58,7 +59,7 @@ def cli(ctx: click.Context, logging_file: str | None, verbose: bool, vault_root:
     logging.captureWarnings(True)
 
 
-@cli.group("search", help="Index, embed, query, and serve wiki search (FTS5 + semantic vector search).")
+@cli.group("search", help="Index, embed, and query wiki search (FTS5 + semantic vector search).")
 def search_group() -> None:
     """Search subcommands."""
 
@@ -68,6 +69,7 @@ search_group.add_command(query_cmd)
 search_group.add_command(embed_cmd)
 
 cli.add_command(extract_cmd)
+cli.add_command(hook_cmd)
 cli.add_command(index_cmd)
 cli.add_command(lint_cmd)
 cli.add_command(search_group)

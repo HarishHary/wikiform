@@ -1,0 +1,50 @@
+{
+    "hooks": {
+        "SessionStart": [
+            {
+                "hooks": [
+                    {
+                        "type": "command",
+                        "timeout": 15,
+                        "command": "if command -v wikiform >/dev/null 2>&1; then wikiform hook session-start; else echo 'WIKIFORM_MISSING: the wikiform CLI is not on PATH - install it (pipx install wikiform) before using the wikiform skill.'; fi"
+                    }
+                ]
+            }
+        ],
+        "PreToolUse": [
+            {
+                "matcher": "Write|Edit|MultiEdit",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "timeout": 10,
+                        "command": "if command -v wikiform >/dev/null 2>&1; then wikiform hook guard; fi"
+                    }
+                ]
+            }
+        ],
+        "PostToolUse": [
+            {
+                "matcher": "Write|Edit|MultiEdit",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "timeout": 10,
+                        "command": "if command -v wikiform >/dev/null 2>&1; then wikiform hook post-write; fi"
+                    }
+                ]
+            }
+        ],
+        "Stop": [
+            {
+                "hooks": [
+                    {
+                        "type": "command",
+                        "timeout": 120,
+                        "command": "if command -v wikiform >/dev/null 2>&1; then wikiform hook finalize; fi"
+                    }
+                ]
+            }
+        ]
+    }
+}

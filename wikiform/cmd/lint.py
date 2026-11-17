@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import json
 import re
 from collections import Counter, defaultdict
 from collections.abc import Callable
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal, cast
@@ -12,7 +11,8 @@ from typing import Any, Literal, cast
 import click
 from loguru import logger
 
-from wikiform.utils.config import read_schema_required_fields
+from wikiform.utils.cli_helpers import emit_json, resolve_vault_root
+from wikiform.utils.config import read_schema_categories, read_schema_required_fields
 from wikiform.utils.fs import (
     collect_vault_files,
     extract_wikilinks,
@@ -35,18 +35,26 @@ class FileInfo:
 
 
 # Wiki-level files that are auto-generated and exempt from orphan/frontmatter checks.
-AUTO_GENERATED_WIKI_FILES: frozenset[str] = frozenset({
-    "wiki/index.md",
-    "wiki/tag-index.md",
-    "wiki/master-index.md",
-    "wiki/log.md",
-    "wiki/overview.md",
-})
+AUTO_GENERATED_WIKI_FILES: frozenset[str] = frozenset(
+    {
+        "wiki/index.md",
+        "wiki/tag-index.md",
+        "wiki/master-index.md",
+        "wiki/log.md",
+        "wiki/overview.md",
+    }
+)
 
 
 IssueCheck = Literal[
-    "broken_link", "frontmatter", "orphan", "tag_consistency",
-    "stale_raw", "naming", "empty", "missing_cross_ref",
+    "broken_link",
+    "frontmatter",
+    "orphan",
+    "tag_consistency",
+    "stale_raw",
+    "naming",
+    "empty",
+    "missing_cross_ref",
 ]
 
 
@@ -81,6 +89,7 @@ class Report:
 
 
 # ─── File collection ──────────────────────────────────────────────────────────
+
 
 def _collect_files(vault_root: Path) -> dict[str, FileInfo]:
     files: dict[str, FileInfo] = {}
@@ -149,91 +158,135 @@ _TAG_NORMALISE_RE = re.compile(r"[-_\s]+")
 _STALE_RAW_DAYS: int = 7
 _SECONDS_PER_DAY: int = 86400
 _HEALTH_FAIR_WARNING_THRESHOLD: int = 5
+# Raw files use the raw-file frontmatter, not the wiki-page frontmatter defined in SCHEMA.md.
+RAW_REQUIRED_FIELDS: frozenset[str] = frozenset({"title", "source_type", "status", "added"})
+_MAX_CROSS_REF_SUGGESTIONS: int = 5  # skip pages with more unlinked tag-neighbours than this (too noisy)
+
+
+def _is_exempt(path: str, info: FileInfo) -> bool:
+    """Auto-generated files are exempt from most checks."""
+    return path in AUTO_GENERATED_WIKI_FILES or bool(info.meta.get("auto_generated"))
 
 
 # ─── Linter ───────────────────────────────────────────────────────────────────
+
 
 @dataclass
 class Linter:
     files: dict[str, FileInfo]
     required_fields: frozenset[str]
     pages_dir_rel: str
+    categories: frozenset[str] = frozenset()  # Index Categories from SCHEMA.md; enables the first-tag rule
     _stem_map: dict[str, list[str]] = field(init=False, repr=False)
+
+    _link_cache: dict[str, list[str]] = field(init=False, repr=False, default_factory=dict)
 
     def __post_init__(self) -> None:
         self._stem_map = _build_stem_map(self.files)
+
+    def _resolve(self, link: str) -> list[str]:
+        """Resolve a wikilink target, memoised across checks (broken_link, orphan and cross-ref all resolve every link)."""
+        cached = self._link_cache.get(link)
+        if cached is None:
+            cached = self._link_cache[link] = _resolve_link(link, self.files, self._stem_map)
+        return cached
 
     # ── individual checks ────────────────────────────────────────────────────
 
     def check_broken_links(self) -> list[Issue]:
         issues: list[Issue] = []
         for path, info in self.files.items():
-            if path in AUTO_GENERATED_WIKI_FILES or info.meta.get("auto_generated"):
+            if _is_exempt(path, info):
                 continue
             for link in extract_wikilinks(info.content):
-                if not _resolve_link(link, self.files, self._stem_map):
-                    issues.append(Issue(
-                        type="error", check="broken_link", file=path,
-                        message=f"Broken wikilink [[{link}]] - no matching file found",
-                    ))
+                if not self._resolve(link):
+                    issues.append(
+                        Issue(
+                            type="error",
+                            check="broken_link",
+                            file=path,
+                            message=f"Broken wikilink [[{link}]] - no matching file found",
+                        )
+                    )
         return issues
 
     def check_frontmatter(self) -> list[Issue]:
         issues: list[Issue] = []
         for path, info in self.files.items():
             meta = info.meta
-            if path in AUTO_GENERATED_WIKI_FILES or meta.get("auto_generated"):
+            if _is_exempt(path, info):
                 continue
             if not meta:
-                issues.append(Issue(
-                    type="error", check="frontmatter", file=path,
-                    message="No YAML frontmatter found",
-                ))
+                issues.append(
+                    Issue(
+                        type="error",
+                        check="frontmatter",
+                        file=path,
+                        message="No YAML frontmatter found",
+                    )
+                )
                 continue
-            missing = sorted(f for f in self.required_fields if f not in meta)
+            required = RAW_REQUIRED_FIELDS if path.startswith("raw/") else self.required_fields
+            missing = sorted(f for f in required if f not in meta)
             if missing:
-                issues.append(Issue(
-                    type="warning", check="frontmatter", file=path,
-                    message=f"Missing required fields: {', '.join(missing)}",
-                ))
+                issues.append(
+                    Issue(
+                        type="warning",
+                        check="frontmatter",
+                        file=path,
+                        message=f"Missing required fields: {', '.join(missing)}",
+                    )
+                )
             tags = meta.get("tags")
             if tags is not None and not isinstance(tags, list):
-                issues.append(Issue(
-                    type="warning", check="frontmatter", file=path,
-                    message=f"'tags' must be a YAML list, got {type(tags).__name__}",
-                ))
+                issues.append(
+                    Issue(
+                        type="warning",
+                        check="frontmatter",
+                        file=path,
+                        message=f"'tags' must be a YAML list, got {type(tags).__name__}",
+                    )
+                )
+            if self.categories and isinstance(tags, list) and path.startswith(self.pages_dir_rel + "/"):
+                first = str(tags[0]).strip() if tags else ""
+                if first.lower() not in {c.lower() for c in self.categories}:
+                    valid = ", ".join(sorted(self.categories))
+                    message = f"First tag {first!r} is not an Index Category (one of: {valid})" if first else f"No tags: the first tag must be an Index Category (one of: {valid})"
+                    issues.append(Issue(type="warning", check="frontmatter", file=path, message=message))
         return issues
 
     def check_orphans(self) -> list[Issue]:
         incoming: dict[str, int] = defaultdict(int)
         for path, info in self.files.items():
-            if path in AUTO_GENERATED_WIKI_FILES or info.meta.get("auto_generated"):
+            if _is_exempt(path, info):
                 continue
             for link in extract_wikilinks(info.content):
-                for target in _resolve_link(link, self.files, self._stem_map):
+                for target in self._resolve(link):
                     incoming[target] += 1
 
         issues: list[Issue] = []
         for path, info in self.files.items():
-            if path in AUTO_GENERATED_WIKI_FILES:
-                continue
-            if info.meta.get("auto_generated"):
+            if _is_exempt(path, info):
                 continue
             if "templates/" in path:
                 continue
             if path.startswith("raw/") and info.meta.get("status") != "ingested":
                 continue
             if incoming[path] == 0:
-                issues.append(Issue(
-                    type="info", check="orphan", file=path,
-                    message="No incoming wikilinks from any other file",
-                ))
+                issues.append(
+                    Issue(
+                        type="info",
+                        check="orphan",
+                        file=path,
+                        message="No incoming wikilinks from any other file",
+                    )
+                )
         return issues
 
     def check_tag_consistency(self) -> list[Issue]:
         tag_counts: Counter[str] = Counter()
         for path, info in self.files.items():
-            if path in AUTO_GENERATED_WIKI_FILES or info.meta.get("auto_generated"):
+            if _is_exempt(path, info):
                 continue
             tags = info.meta.get("tags", [])
             if isinstance(tags, list):
@@ -246,16 +299,24 @@ class Linter:
         seen: dict[str, str] = {}
         for tag in sorted(tag_counts.keys()):
             if tag_counts[tag] == 1:
-                issues.append(Issue(
-                    type="info", check="tag_consistency", file=None,
-                    message=f"Tag '{tag}' used only once - possible typo?",
-                ))
+                issues.append(
+                    Issue(
+                        type="info",
+                        check="tag_consistency",
+                        file=None,
+                        message=f"Tag '{tag}' used only once - possible typo?",
+                    )
+                )
             normalised = _TAG_NORMALISE_RE.sub("", tag)
             if normalised in seen and seen[normalised] != tag:
-                issues.append(Issue(
-                    type="info", check="tag_consistency", file=None,
-                    message=f"Similar tags: '{seen[normalised]}' and '{tag}' - consider merging",
-                ))
+                issues.append(
+                    Issue(
+                        type="info",
+                        check="tag_consistency",
+                        file=None,
+                        message=f"Similar tags: '{seen[normalised]}' and '{tag}' - consider merging",
+                    )
+                )
             seen[normalised] = tag
         return issues
 
@@ -268,10 +329,14 @@ class Linter:
             if info.mtime == 0.0:
                 continue
             if info.meta.get("status") == "raw" and info.mtime < cutoff:
-                issues.append(Issue(
-                    type="info", check="stale_raw", file=path,
-                    message=f"Raw source older than {_STALE_RAW_DAYS} days with status 'raw' - not yet ingested",
-                ))
+                issues.append(
+                    Issue(
+                        type="info",
+                        check="stale_raw",
+                        file=path,
+                        message=f"Raw source older than {_STALE_RAW_DAYS} days with status 'raw' - not yet ingested",
+                    )
+                )
         return issues
 
     def check_naming(self) -> list[Issue]:
@@ -283,33 +348,45 @@ class Linter:
             if info.meta.get("auto_generated"):
                 continue
             if not _KEBAB_RE.match(info.stem):
-                issues.append(Issue(
-                    type="warning", check="naming", file=path,
-                    message=f"Filename '{info.stem}' violates kebab-case slug convention",
-                ))
+                issues.append(
+                    Issue(
+                        type="warning",
+                        check="naming",
+                        file=path,
+                        message=f"Filename '{info.stem}' violates kebab-case slug convention",
+                    )
+                )
         return issues
 
     def check_empty(self) -> list[Issue]:
         issues: list[Issue] = []
         for path, info in self.files.items():
-            if path in AUTO_GENERATED_WIKI_FILES or info.meta.get("auto_generated"):
+            if _is_exempt(path, info):
                 continue
             if info.size == 0:
-                issues.append(Issue(
-                    type="warning", check="empty", file=path,
-                    message="File is empty (0 bytes)",
-                ))
+                issues.append(
+                    Issue(
+                        type="warning",
+                        check="empty",
+                        file=path,
+                        message="File is empty (0 bytes)",
+                    )
+                )
             elif not info.content.strip() and info.meta:
-                issues.append(Issue(
-                    type="info", check="empty", file=path,
-                    message="File has frontmatter but no body content",
-                ))
+                issues.append(
+                    Issue(
+                        type="info",
+                        check="empty",
+                        file=path,
+                        message="File has frontmatter but no body content",
+                    )
+                )
         return issues
 
     def check_cross_refs(self) -> list[Issue]:
         tag_files: dict[str, set[str]] = defaultdict(set)
         for path, info in self.files.items():
-            if path in AUTO_GENERATED_WIKI_FILES or info.meta.get("auto_generated"):
+            if _is_exempt(path, info):
                 continue
             tags = info.meta.get("tags", [])
             if isinstance(tags, list):
@@ -318,13 +395,13 @@ class Linter:
 
         issues: list[Issue] = []
         for path, info in self.files.items():
-            if path in AUTO_GENERATED_WIKI_FILES or info.meta.get("auto_generated"):
+            if _is_exempt(path, info):
                 continue
             if path.startswith("raw/"):
                 continue
             linked: set[str] = set()
             for link in extract_wikilinks(info.content):
-                linked.update(_resolve_link(link, self.files, self._stem_map))
+                linked.update(self._resolve(link))
 
             tags = info.meta.get("tags", [])
             if not isinstance(tags, list):
@@ -336,12 +413,16 @@ class Linter:
             related.discard(path)
 
             unlinked = related - linked
-            if 0 < len(unlinked) <= 5:
+            if 0 < len(unlinked) <= _MAX_CROSS_REF_SUGGESTIONS:
                 for target in sorted(unlinked):
-                    issues.append(Issue(
-                        type="info", check="missing_cross_ref", file=path,
-                        message=f"Consider linking to [[{self.files[target].stem}]] (shared tags)",
-                    ))
+                    issues.append(
+                        Issue(
+                            type="info",
+                            check="missing_cross_ref",
+                            file=path,
+                            message=f"Consider linking to [[{self.files[target].stem}]] (shared tags)",
+                        )
+                    )
         return issues
 
     # ── dispatch ─────────────────────────────────────────────────────────────
@@ -363,9 +444,7 @@ class Linter:
         selected: dict[IssueCheck, Callable[[], list[Issue]]] = {}
         if check_name:
             if check_name not in checks:
-                raise ValueError(
-                    f"Unknown check '{check_name}'. Valid: {', '.join(sorted(checks))}"
-                )
+                raise ValueError(f"Unknown check '{check_name}'. Valid: {', '.join(sorted(checks))}")
             validated: IssueCheck = cast(IssueCheck, check_name)
             selected = {validated: checks[validated]}
         else:
@@ -381,12 +460,38 @@ class Linter:
 
 # ─── Health / report ─────────────────────────────────────────────────────────
 
+
 def _compute_health(errors: int, warnings: int) -> HealthStatus:
     if errors == 0 and warnings <= _HEALTH_FAIR_WARNING_THRESHOLD:
         return "GOOD"
     if errors == 0:
         return "FAIR"
     return "NEEDS_ATTENTION"
+
+
+def lint_file(vault_root: Path, md_file: Path, checks: tuple[IssueCheck, ...] = ("frontmatter", "naming", "empty")) -> list[Issue]:
+    """Run per-file checks (no cross-file context needed) on a single markdown file.
+
+    Used by the post-write hook so a freshly written page is validated without scanning the whole vault.
+    """
+    rel = normalize_rel(md_file, vault_root)
+    attrs, content = load_frontmatter(md_file)
+    try:
+        stat = md_file.stat()
+        size, mtime = stat.st_size, stat.st_mtime
+    except OSError:
+        size, mtime = 0, 0.0
+    info = FileInfo(path=rel, abs_path=str(md_file), stem=md_file.stem, meta=attrs, content=content, size=size, mtime=mtime)
+    linter = Linter(
+        files={rel: info},
+        required_fields=read_schema_required_fields(vault_root),
+        pages_dir_rel="wiki/pages",
+        categories=frozenset(read_schema_categories(vault_root)),
+    )
+    issues: list[Issue] = []
+    for check in checks:
+        issues.extend(linter.run(check)[0])
+    return issues
 
 
 def run_lint(
@@ -398,7 +503,7 @@ def run_lint(
     files = _collect_files(vault_root)
     pages_dir_rel = normalize_rel(pages_dir, vault_root)
 
-    linter = Linter(files=files, required_fields=required_fields, pages_dir_rel=pages_dir_rel)
+    linter = Linter(files=files, required_fields=required_fields, pages_dir_rel=pages_dir_rel, categories=frozenset(read_schema_categories(vault_root)))
     issues, checks_run = linter.run(check_name)
 
     errors = sum(1 for i in issues if i.type == "error")
@@ -424,12 +529,17 @@ def run_lint(
 
     logger.info(
         "Finished: {} files, {} errors, {} warnings, {} infos - {}",
-        summary.files_scanned, errors, warnings, infos, summary.overall_health,
+        summary.files_scanned,
+        errors,
+        warnings,
+        infos,
+        summary.overall_health,
     )
     return report
 
 
 # ─── CLI command ─────────────────────────────────────────────────────────────
+
 
 @click.command("lint", help="Audit the vault for structural issues: broken links, missing frontmatter, orphans, stale raw files, naming, and cross-references.")
 @click.option("--pages-dir", default=None, help="Pages directory (default: <vault-root>/wiki/pages)")
@@ -437,15 +547,7 @@ def run_lint(
 @click.option("-o", "--output", type=click.Path(dir_okay=False, path_type=Path), default=None, help="Write JSON report to file instead of stdout")
 @click.pass_context
 def lint_cmd(ctx: click.Context, pages_dir: str | None, check_name: str | None, output: Path | None) -> None:
-    vault_root = ctx.obj.get("vault_root")
-    if not vault_root:
-        logger.error("Vault root path not provided in context")
-        raise SystemExit(2)
-
-    root = Path(vault_root).resolve()
-    if not root.exists():
-        logger.error("Vault root does not exist: {}", root)
-        raise SystemExit(2)
+    root = resolve_vault_root(ctx)
 
     actual_pages_dir = Path(pages_dir).resolve() if pages_dir else root / "wiki" / "pages"
 
@@ -458,13 +560,6 @@ def lint_cmd(ctx: click.Context, pages_dir: str | None, check_name: str | None, 
         logger.error(str(err))
         raise SystemExit(2) from err
 
-    rendered = json.dumps(asdict(report), indent=2, ensure_ascii=False)
-
-    if output:
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(rendered + "\n", encoding="utf-8")
-        logger.info("Wrote report to {}", output)
-    else:
-        click.echo(rendered)
+    emit_json(report, output, label="report")
 
     raise SystemExit(1 if report.summary.errors > 0 else 0)

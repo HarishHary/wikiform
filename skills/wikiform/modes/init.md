@@ -1,17 +1,10 @@
----
-name: wiki-init
-description: Use when bootstrapping a new personal wiki for any knowledge domain - research, codebase documentation, reading notes, competitive analysis, or any long-term knowledge accumulation project.
----
-
 # Wiki Init
 
 Bootstrap a new LLM-backed wiki at a user-specified path.
 
-Here's the rewritten pre-flight section:
-
 ## Pre-condition
 
-Before doing anything, run `which wikiform`. If not found, tell the user to run `pipx install wikiform` and stop.
+Before doing anything, follow the binary check in `_shared.md` (`wikiform` must be installed). Do not apply its vault-root resolution here - this mode creates the vault.
 
 **Step 1 - Locate existing SCHEMA.md:**
 
@@ -228,7 +221,7 @@ The `outputs/` subdirectories are placeholders for artifacts produced by other s
 
 `SCHEMA.md` is the authoritative reference file for all wiki skills. Every skill reads it on startup to locate the wiki and understand its conventions. Write it carefully - errors here propagate to every subsequent operation.
 
-```markdown
+````markdown
 # Wiki Schema
 
 ## Identity
@@ -246,6 +239,7 @@ The `outputs/` subdirectories are placeholders for artifacts produced by other s
 - `raw/papers/` - PDFs, paper summaries, research notes
 - `raw/repos/` - repository dumps or clones
 - `raw/datasets/` - dataset files and descriptions
+- `raw/misc/` - unrecognised or binary types (written by `wikiform extract`)
 - `raw/images/` - downloaded images
 - `raw/code/` - code files and snippets
 - `wiki/` - all LLM-maintained wiki files
@@ -257,15 +251,15 @@ The `outputs/` subdirectories are placeholders for artifacts produced by other s
 
 Every file in `wiki/pages/` must start with this frontmatter:
 
-\`\`\`yaml
+```yaml
 ---
 title: <page title>
 tags: [<primary tag>, <additional tags>]
 sources: [<raw-file-slug>]
-type: <paper | article | code | repo | image | dataset | entity | concept | other>
+type: <paper | article | code | repo | image | dataset | entity | concept | analysis | other>
 updated: YYYY-MM-DD
 ---
-\`\`\`
+```
 
 Field rules:
 
@@ -277,17 +271,19 @@ Field rules:
 
 Every file in `raw/` must have frontmatter (inline for text files, sidecar `.meta.yaml` for binary files):
 
-\`\`\`yaml
+```yaml
 ---
 title: <source title or filename>
 source_type: <paper | article | code | repo | image | dataset | other>
+source_url: <URL the source was fetched from - only for web sources>
+source_file: <vault-relative path of the preserved original file, e.g. raw/papers/foo.pdf - omitted for URLs and .md sources>
 status: <raw | ingested>
 slug: <slug of the wiki page produced - blank until step 5 of wiki-ingest>
 ingested_date: <YYYY-MM-DD - blank until ingestion complete>
 ingested_to: [<list of wiki page slugs produced by ingestion>]
 added: <YYYY-MM-DD - date added to raw/, never changes>
 ---
-\`\`\`
+```
 
 ## Cross-References
 
@@ -299,9 +295,9 @@ Slugs are kebab-case, lowercase, no special characters.
 
 `wiki/log.md` is append-only. New entries are added at the top. Never rewrite or delete existing entries.
 
-\`\`\`yaml
+```text
 ## [YYYY-MM-DD] <operation> | <title>
-\`\`\`
+```
 
 Valid operations:
 
@@ -323,7 +319,7 @@ Valid operations:
 
 - First tag in every page's frontmatter must be one of the Index Categories above.
 - Additional tags are unrestricted but should be consistent across pages.
-- Entity pages: primary tag is `entity` or `concept`. These are not Index Categories - entity and concept pages appear in the index under whichever category is most relevant to the domain.
+- Entity and concept pages are marked with `type: entity` / `type: concept` (and may also carry an `entity` / `concept` tag), but their **first tag is still an Index Category** - the one most relevant to the domain. That is the category they appear under in the index.
 - `stub` tag: reserved for incomplete pages created by `wiki-ingest` step 7 Rule C. Remove when the page is fully written.
 
 ## Slug Rules
@@ -335,7 +331,7 @@ Valid operations:
 
 ## Immutability Policy
 
-- `raw/` body content is immutable - skills never modify the text of a raw file.
+- `raw/` body content is immutable - skills never modify the text of a raw file. Original binaries (PDFs, images, ...) are copied next to their markdown by `wikiform extract` and are never modified.
 - Exception: skills may write and update YAML frontmatter blocks at the top of raw text files, and sidecar `.meta.yaml` files for binary raw files. This is metadata tracking, not content modification.
 - `wiki/`, `outputs/` and `_meta` are fully writable by skills.
 - `wiki/log.md` is append-only - entries are never edited or deleted.
@@ -344,7 +340,7 @@ Valid operations:
 
 - Schema version 2 is required by wiki-ingest v2 and later.
 - If a skill reports schema incompatibility, run wiki-init repair to update this file.
-```
+````
 
 ### 4. Write `wiki/index.md`
 
@@ -363,8 +359,11 @@ description: Primary content catalog. Every wiki page listed once, by category. 
 > Auto-generated. Do not edit manually - changes will be overwritten by wiki-ingest.
 
 <for each category in WIKI_CATEGORIES, in the order the user specified>
+
 ## <Category Name>
+
 <!-- wiki-ingest adds entries here in format: - [[slug]] - <one-line summary> -->
+
 </for each category>
 ```
 
@@ -452,11 +451,13 @@ description: Append-only audit trail of all wiki operations. Valid operations: i
 **Schema version:** 2
 
 ### Configuration
+
 - **Domain:** <WIKI_DOMAIN>
 - **Source types:** <WIKI_SOURCE_TYPES>
 - **Categories:** <WIKI_CATEGORIES>
 
 ### Directories created
+
 - `raw/articles/`
 - `raw/papers/`
 - `raw/repos/`
@@ -470,6 +471,7 @@ description: Append-only audit trail of all wiki operations. Valid operations: i
 - `outputs/reports/`
 
 ### Files created
+
 - `SCHEMA.md`
 - `wiki/index.md`
 - `wiki/tag-index.md`
@@ -478,6 +480,7 @@ description: Append-only audit trail of all wiki operations. Valid operations: i
 - `wiki/overview.md`
 
 ### Notes
+
 <if any directories already existed and were left unchanged, list them here>
 <if no notes, write "None">
 ```
@@ -509,7 +512,7 @@ auto_generated: partial
 > Entry format: `- [[slug]] - <one sentence on why this entity matters to the domain>`
 > Stub pages are never listed here.
 
-*No sources ingested yet.*
+_No sources ingested yet._
 
 ## Current Understanding
 
@@ -518,7 +521,7 @@ auto_generated: partial
 > Updated when a source: changes how a core aspect of the domain should be understood,
 > contradicts or qualifies something already stated here, or fills a previously noted gap.
 
-*No sources ingested yet.*
+_No sources ingested yet._
 
 ## Open Questions
 
@@ -526,7 +529,7 @@ auto_generated: partial
 > or unexamined assumption. Resolved questions are removed - do not let them accumulate.
 > Entry format: `- <question as a single interrogative sentence> - raised by [[slug]]`
 
-*No sources ingested yet.*
+_No sources ingested yet._
 ```
 
 ### 9. Confirm
@@ -586,8 +589,7 @@ If all checks pass: report to the user as follows.
 
 1. **Add your first source** - either copy a file into `raw/` and run `wiki-ingest <path>`, or run `wiki-ingest <URL>` directly.
 2. **Review `SCHEMA.md`** - confirm the domain, source types, and categories reflect your intent. This is the only time editing `SCHEMA.md` directly is straightforward - later changes risk breaking skill compatibility.
-3. **Install wikiform** - Without `wikiform` installed, `wiki-ingest` steps 8, 9, and 10 will fall back to manual procedures. <if wikiform is already present, omit this item>
-4. **Run `wiki-lint`** periodically to check for broken wikilinks, missing frontmatter, and stale indexes. <note: wiki-lint is a separate skill not included in this initialization - install it separately>
+3. **Run lint** (`/wikiform:wikiform lint`) periodically to check for broken wikilinks, missing frontmatter, and stale indexes.
 
 **Important:**
 

@@ -359,3 +359,50 @@ def test_run_lint_detects_broken_link(vault: Path):
     report = run_lint(vault, vault / "wiki" / "pages")
     assert any(i.check == "broken_link" for i in report.issues)
     assert report.summary.errors >= 1
+
+
+# ─── link resolution cache ────────────────────────────────────────────────────
+
+def test_links_are_resolved_once_across_checks(vault, monkeypatch):
+    from tests.conftest import write_page
+    from wikiform.cmd import lint as lint_mod
+
+    write_page(vault, "a.md", "---\ntitle: A\ntags: [x]\nupdated: 2024-01-01\n---\nSee [[b]] and [[b]].\n")
+    write_page(vault, "b.md", "---\ntitle: B\ntags: [x]\nupdated: 2024-01-01\n---\nBack to [[a]].\n")
+    calls: list[str] = []
+    real = lint_mod._resolve_link
+    monkeypatch.setattr(lint_mod, "_resolve_link", lambda link, *a: (calls.append(link), real(link, *a))[1])
+    lint_mod.run_lint(vault, vault / "wiki" / "pages")
+    assert sorted(calls) == ["a", "b"]
+
+
+# ─── first-tag rule and raw-file schema ───────────────────────────────────────
+
+def test_first_tag_must_be_an_index_category():
+    files = {
+        "wiki/pages/ok.md": make_file("wiki/pages/ok.md", meta={"title": "t", "tags": ["Research", "x"], "updated": "d"}),
+        "wiki/pages/bad.md": make_file("wiki/pages/bad.md", meta={"title": "t", "tags": ["entity", "Research"], "updated": "d"}),
+        "wiki/pages/none.md": make_file("wiki/pages/none.md", meta={"title": "t", "tags": [], "updated": "d"}),
+    }
+    linter = make_linter(files)
+    linter.categories = frozenset({"Research", "Engineering"})
+    flagged = {i.file: i.message for i in linter.check_frontmatter()}
+    assert "wiki/pages/ok.md" not in flagged
+    assert "'entity'" in flagged["wiki/pages/bad.md"]
+    assert "No tags" in flagged["wiki/pages/none.md"]
+
+
+def test_first_tag_rule_is_off_without_categories():
+    files = {"wiki/pages/p.md": make_file("wiki/pages/p.md", meta={"title": "t", "tags": ["anything"], "updated": "d"})}
+    assert make_linter(files).check_frontmatter() == []
+
+
+def test_raw_files_are_checked_against_raw_frontmatter_not_page_frontmatter():
+    raw_ok = {"title": "t", "source_type": "paper", "status": "raw", "added": "2024-01-01"}
+    files = {
+        "raw/papers/ok.md": make_file("raw/papers/ok.md", meta=raw_ok),
+        "raw/papers/thin.md": make_file("raw/papers/thin.md", meta={"title": "t"}),
+    }
+    flagged = {i.file: i.message for i in make_linter(files).check_frontmatter()}
+    assert "raw/papers/ok.md" not in flagged  # previously warned: "Missing required fields: tags, updated"
+    assert "added" in flagged["raw/papers/thin.md"] and "source_type" in flagged["raw/papers/thin.md"]

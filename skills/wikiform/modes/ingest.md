@@ -1,17 +1,10 @@
----
-name: wiki-ingest
-description: Use when adding a new source to a wiki - a paper, article, URL, file, transcript, or any document.
----
-
 # Wiki Ingest
 
 Add a source to the wiki. Read it, discuss with the user, write a summary page, update entity/concept pages, and maintain the index, overview, and log.
 
 ## Pre-condition
 
-Before doing anything, run `which wikiform`. If not found, tell the user to run `pip install wikiform` and stop.
-
-Search for `SCHEMA.md` starting from the current directory and upward. If not found, tell the user to run `wiki-init` first.
+Follow `_shared.md`: binary check, vault root resolution (`<WIKI_ROOT>`), and how to invoke the CLI (`--vault-root` goes before the subcommand). If no vault is found, tell the user to run init first.
 
 Read `SCHEMA.md` to learn: wiki root path, page frontmatter format, cross-reference convention, log entry format, indexes taxonomy.
 
@@ -34,18 +27,27 @@ Identify the source type and route it to the correct `raw/` subdirectory. Do not
 
 | Source type                                           | How to read                                                                    | Save to                        |
 | ----------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------ |
-| File path - document (`.pdf`, `.md`, `.txt`, `.docx`) | Read directly                                                                  | `raw/papers/<filename>`        |
-| File path - data (`.csv`, `.json`, `.yaml`, `.toml`)  | Read directly                                                                  | `raw/datasets/<filename>`      |
-| File path - image (`.png`, `.jpg`, `.svg`)            | Read directly                                                                  | `raw/images/<filename>`        |
-| File path - code (`.py`, `.go`, `.ts`, etc.)          | Read directly                                                                  | `raw/code/<filename>`          |
-| URL                                                   | Fetch with `browse` skill. If `browse` is unavailable, tell the user and stop. | `raw/articles/<slug>.<ext>`    |
+| File path - document (`.pdf`, `.md`, `.txt`, `.docx`, `.pptx`) | `wikiform extract` (see below)                                        | `raw/papers/<slug>.md`         |
+| File path - data (`.csv`, `.json`, `.yaml`, `.toml`, `.xlsx`)  | `wikiform extract`                                                    | `raw/datasets/<slug>.md`       |
+| File path - image (`.png`, `.jpg`, `.svg`)            | `wikiform extract` copies the image and writes a markdown stub with the frontmatter; then view the image itself at `source_file` (the stub text has only size metadata) | `raw/images/<slug>.<ext>` + `<slug>.md` |
+| File path - code (`.py`, `.go`, `.ts`, etc.)          | `wikiform extract`                                                             | `raw/code/<slug>.md`           |
+| URL                                                   | `wikiform extract <URL>`. If it fails or returns empty content (paywall, JS-rendered page), fall back to the `browse` skill; if that is unavailable, tell the user and stop. | `raw/articles/<slug>.md`       |
 | Pasted text                                           | Format as markdown                                                             | `raw/papers/<slug>.md`         |
 | Code snippet                                          | Format as markdown with fenced code block and language tag                     | `raw/code/<slug>.md`           |
 | Repository                                            | Clone or copy                                                                  | `raw/repos/<slug>/`            |
 | Other                                                 | Ask the user: what is this and how should it be accessed? Do not guess.        | Determined after clarification |
 
-**Conflict check:** Before saving, check whether a file with the same name already exists in the target directory.
-- If yes: tell the user, show the existing file's `ingested_date` if present, and ask whether to overwrite or abort.
+**Using `wikiform extract`:** run
+
+```bash
+wikiform --vault-root "<WIKI_ROOT>" extract "<path-or-URL>"
+```
+
+It converts the source to markdown (PDF via opendataloader/markitdown, HTML via trafilatura), writes `raw/<subdir>/<slug>.md` with the raw-file frontmatter from step 4 already filled in (`status: raw`, blank `slug` / `ingested_date`, empty `ingested_to`, `added`), and prints JSON including the `output` path - use that path as the raw file from here on. The original file is also copied next to it (`raw/<subdir>/<slug>.<original ext>`, e.g. `raw/papers/foo.pdf`) and recorded in the markdown's `source_file` frontmatter field, so the source of truth is preserved; `.md` sources and URLs are not copied (URLs are recorded in `source_url`). Read the converted markdown; open the original (`source_file`) only when the conversion lost something such as figures or layout.
+
+**Conflict check:** `wikiform extract` exits `1` if the output file already exists. Otherwise, before saving, check whether a file with the same name already exists in the target directory.
+
+- If yes: tell the user, show the existing file's `ingested_date` if present, and ask whether to overwrite or abort. Re-run `extract` with `--overwrite` only after the user confirms.
 - If no: save and proceed.
 
 ### 2. Read the source in full
@@ -96,7 +98,7 @@ Do not proceed to step 4 until the user has responded.
 
 ### 4. Tag the raw file with frontmatter
 
-Write the following frontmatter to the raw file immediately after saving it in step 1. Do not wait until later steps.
+Files produced by `wikiform extract` already contain this frontmatter - verify it and only correct `title` if the source has a better one. For every other raw file (repos, pasted text, code snippets), write the following frontmatter immediately after saving it in step 1. Do not wait until later steps.
 
 ```yaml
 ---
@@ -116,13 +118,14 @@ added: <today>
 | --------------- | --------------------------------------------------------------------------------------- |
 | `title`         | Use the source's own title if present. If not, use the filename. Do not invent a title. |
 | `source_type`   | Must match the routing decision made in step 1.                                         |
+| `source_file`   | Set by `wikiform extract` (vault-relative path of the preserved original). Never edit or invent it; omit for pasted text, URLs and `.md` sources. |
 | `status`        | Always `raw` at this point. Only two valid values: `raw` and `ingested`.                |
 | `slug`          | Leave blank now. Step 5 will generate it. Write it back here after step 5 completes.    |
 | `ingested_date` | Leave blank now. Step 12 will fill it.                                                  |
 | `ingested_to`   | Empty list. Step 12 will populate it.                                                   |
 | `added`         | Today's date. This never changes after being set.                                       |
 
-**If the raw file is a binary format** (PDF, image) that does not support inline frontmatter: create a sidecar file at `<same path>/<filename>.meta.yaml` with the same fields.
+**If the raw file is a binary that was not processed by `wikiform extract`** and so has no markdown companion: create a sidecar file at `<same path>/<filename>.meta.yaml` with the same fields.
 
 ### 5. Generate the slug
 
@@ -168,21 +171,27 @@ updated: <today>
 # <Source Title>
 
 ## Claim
+
 <One to two sentences. What does this source assert or demonstrate? State it as a falsifiable claim where possible. Do not evaluate it here.>
 
 ## Mechanism
+
 <How does it work? For a paper: the method, architecture, or theoretical argument. For an article: the chain of reasoning or narrative structure. For code: what it does and how. Be concrete - name components, steps, or stages. Use a numbered list if there is a clear sequence, bullet points if not.>
 
 ## Evidence
+
 <What supports the claim? Data, experiments, benchmarks, examples, citations. If the source provides none, say so explicitly. Do not infer evidence that isn't present.>
 
 ## Limitations
+
 <What does the source not cover, assume without justification, or fail to test? Include contradictions with existing wiki pages if any were found in step 3. If no limitations are apparent, write "None identified" - do not omit the section.>
 
 ## Entities & Concepts
+
 <One [[slug]] per line. These are the entities and concepts this source introduces or significantly updates. If a page doesn't exist yet, list it anyway - it will be created in step 7.>
 
 ## Connections
+
 <Wikilinks only. One line per connection, format: [[slug]] - <one clause on why it's relevant>. No prose paragraph.>
 ```
 
@@ -211,35 +220,7 @@ If uncertain whether Rule A or Rule B applies, default to **Rule A** and flag th
 ```markdown
 ---
 title: <Entity or Concept Name>
-tags: [<entity | concept>, <additional tags>]
-sources: [<raw-file-slug>]
-updated: <today>
----
-
-# <Name>
-
-## Definition
-<One to two sentences. What is this, precisely? Avoid "is a type of" unless taxonomy is the point.>
-
-## How It Works
-<Mechanism, structure, or behavior. Be concrete - name components, steps, or stages. If this is a concept rather than a system, describe the logical content: what it asserts or entails.>
-
-## Open Questions
-<What is not yet settled or understood about this entity based on current wiki sources? Omit section if none.>
-
-## Appearances in Sources
-- [[raw-file-slug]] - <role: introduced / used / challenged / extended>
-
-## Related Concepts
-- [[related-slug]] - <relationship: depends on / contrasts with / generalizes / instantiates>
-```
-
-**Page template (Rule C, stub):**
-
-```markdown
----
-title: <Entity or Concept Name>
-tags: [<entity | concept>, stub]
+tags: [<primary Index Category>, <entity | concept>, <additional tags>]
 sources: [<raw-file-slug>]
 type: <entity | concept>
 updated: <today>
@@ -248,9 +229,45 @@ updated: <today>
 # <Name>
 
 ## Definition
+
+<One to two sentences. What is this, precisely? Avoid "is a type of" unless taxonomy is the point.>
+
+## How It Works
+
+<Mechanism, structure, or behavior. Be concrete - name components, steps, or stages. If this is a concept rather than a system, describe the logical content: what it asserts or entails.>
+
+## Open Questions
+
+<What is not yet settled or understood about this entity based on current wiki sources? Omit section if none.>
+
+## Appearances in Sources
+
+- [[raw-file-slug]] - <role: introduced / used / challenged / extended>
+
+## Related Concepts
+
+- [[related-slug]] - <relationship: depends on / contrasts with / generalizes / instantiates>
+```
+
+**Page template (Rule C, stub):**
+
+```markdown
+---
+title: <Entity or Concept Name>
+tags: [<primary Index Category>, <entity | concept>, stub]
+sources: [<raw-file-slug>]
+type: <entity | concept>
+updated: <today>
+---
+
+# <Name>
+
+## Definition
+
 <One to two sentences from the source that mentions this entity. Do not expand beyond what the source supports.>
 
 ## Appearances in Sources
+
 - [[raw-file-slug]] - mentioned
 ```
 
@@ -258,21 +275,21 @@ updated: <today>
 
 ```markdown
 ## [<today>] ingest | stub created: [[<slug>]]
+
 Source: [[<raw-file-slug>]] (or: <triggering skill> - <question or reason>)
 Expand when: <suggested ingest target or condition>
 ```
 
 **Tag rule:**
 
-Use exactly one primary tag per entity page:
+The **first tag is always an Index Category** from `SCHEMA.md` (the one most relevant to the page; `wikiform lint` and the post-write hook flag anything else). Then add exactly one of these kind tags, and set `type:` to the same value:
 
 | Tag       | When to use                                                                                |
 | --------- | ------------------------------------------------------------------------------------------ |
 | `entity`  | A named thing that exists in the world: system, tool, person, organisation, dataset, model |
 | `concept` | An idea, method, principle, or theoretical construct                                       |
 
-Additional tags are allowed and encouraged but must follow the wiki's tag taxonomy from `SCHEMA.md`. The primary tag (`entity` or `concept`) must always be first in the list.
-
+Additional tags are allowed and encouraged but must follow the wiki's tag taxonomy from `SCHEMA.md`.
 
 ### 8. Backlink audit
 
@@ -284,24 +301,18 @@ For each entity name from step 7's list:
 
 1. Search `wiki/pages/` for pages that contain the entity's name as plain text but do not already have `[[<slug>]]` linking to it.
 2. For each match found, identify the most appropriate insertion point using this priority order:
-   - `## Related Concepts` section - add `[[slug]] - <relationship>`
-   - `## Connections` section - add `[[slug]] - <one clause on relevance>`
-   - Inline in body text - only if the entity name appears in a sentence where a link would add navigational value. Do not add inline links mechanically to every occurrence - one per page is sufficient.
+    - `## Related Concepts` section - add `[[slug]] - <relationship>`
+    - `## Connections` section - add `[[slug]] - <one clause on relevance>`
+    - Inline in body text - only if the entity name appears in a sentence where a link would add navigational value. Do not add inline links mechanically to every occurrence - one per page is sufficient.
 3. Do not add a backlink if the mention is incidental (e.g. the entity name appears in a quote, a log entry, or a list of unrelated examples).
 
 **After manual scan, run the lint script:**
 
 ```bash
-pyenv activate obsidian && wikiform lint
+wikiform --vault-root "<WIKI_ROOT>" lint
 ```
 
-If the `obsidian` pyenv environment is unavailable, run:
-
-```bash
-wikiform lint
-```
-
-If neither works, note the failure in the log and proceed - do not block ingestion on lint failure.
+Exit code `1` only means the report contains errors - read the JSON report on stdout. Exit code `2` or a missing binary is a real failure: note it in the log and proceed - do not block ingestion on lint failure.
 
 **Lint output priority:**
 
@@ -315,6 +326,7 @@ If neither works, note the failure in the log and proceed - do not block ingesti
 
 ```markdown
 ## [<today>] lint-deferred | <source slug>
+
 Deferred: <list of warnings/suggestions deferred to future pass>
 ```
 
@@ -324,20 +336,14 @@ The wiki maintains three index files. All three must reflect every page created 
 
 | Index file             | Purpose                                    | Updated by       |
 | ---------------------- | ------------------------------------------ | ---------------- |
-| `wiki/index.md`        | Every page, one-line summary, by category  | Script or manual |
-| `wiki/tag-index.md`    | Every page, by tag alphabetically          | Script or manual |
-| `wiki/master-index.md` | Every page, by title letter alphabetically | Script or manual |
+| `wiki/index.md`        | Every page, one-line summary, by category  | Script           |
+| `wiki/tag-index.md`    | Every page, by tag alphabetically          | Script           |
+| `wiki/master-index.md` | Every page, by title letter alphabetically | Script           |
 
 **Run the index script:**
 
 ```bash
-pyenv activate obsidian && wikiform index
-```
-
-If the `obsidian` pyenv environment is unavailable, run:
-
-```bash
-wikiform index
+wikiform --vault-root "<WIKI_ROOT>" index
 ```
 
 **After the script runs, verify the output:**
@@ -350,38 +356,15 @@ For each page created or updated in steps 6 and 7, confirm:
 
 If any entry is missing or incorrect, do not proceed - fix it manually using the manual update instructions below.
 
-**If the script fails or is unavailable:**
+**If the script fails:**
 
-Fall back to manual updates for each page created or updated in steps 6 and 7:
-
-**`wiki/index.md`** - add under the correct category:
-
-```markdown
-- [[slug]] - <one-line summary matching the page title and claim>
-```
-
-**`wiki/tag-index.md`** - for each tag in the page's frontmatter, add under the correct tag heading:
-
-```markdown
-- [[slug]] - <one-line summary>
-```
-
-If the tag heading does not exist yet, create it in alphabetical order.
-
-**`wiki/master-index.md`** - add under the correct letter heading:
-
-```markdown
-- [[slug]] - <one-line summary>
-```
-
-If the letter heading does not exist yet, create it in alphabetical order.
-
-**Log script failures:**
+Do not hand-edit the three index files - a plugin hook blocks edits to them and the next run would overwrite them anyway. Find the cause from the error (most often a page with malformed frontmatter - run `wikiform --vault-root "<WIKI_ROOT>" lint`), fix the page, and re-run the script. If it still fails, log it and proceed:
 
 ```markdown
 ## [<today>] lint-deferred | <source slug>
+
 Index script failed: <error or reason>
-Manual update applied to: index.md, tag-index.md, master-index.md
+Indexes not updated: index.md, tag-index.md, master-index.md
 ```
 
 ### 10. Update the search index
@@ -390,29 +373,31 @@ The search index enables full-text lookup across all wiki pages. It must be upda
 
 **Incremental vs full reindex:**
 
-| Mode            | When to use                                                                                                                |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `--incremental` | Default. Indexes only new or modified pages. Use after normal ingestion.                                                   |
-| `--full`        | Use when: a page was renamed or its slug changed, a page was deleted, or the incremental index produces incorrect results. |
+| Mode            | When to use                                                                                                                                   |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--incremental` | Normal ingestion. Re-indexes only new or modified pages (by file mtime) and removes entries for deleted or renamed pages. Pass it explicitly. |
+| *(no flag)*     | Full reindex of every page. Use when the incremental index produces incorrect results.                                                        |
 
 **Run the search index script:**
 
 ```bash
-pyenv activate obsidian && wikiform search index --incremental
+wikiform --vault-root "<WIKI_ROOT>" search index --incremental
 ```
 
-If the `obsidian` pyenv environment is unavailable, run:
+If the vault already uses semantic search (embeddings were generated before with `search embed`; check that the `articles_vec` table exists or ask the user), refresh them too. `--incremental` re-embeds only pages whose text changed:
 
 ```bash
-wikiform search index --incremental
+wikiform --vault-root "<WIKI_ROOT>" search embed --incremental
 ```
+
+Skip `search embed` if the vault has never been embedded - it downloads a model and is slow.
 
 **After the script runs, verify the output:**
 
 For each page created or updated in steps 6 and 7, run a test query using a distinctive term from the page's `## Claim` section:
 
 ```bash
-wikiform search query "<distinctive term>"
+wikiform --vault-root "<WIKI_ROOT>" search query "<distinctive term>" --json
 ```
 
 Confirm the new page appears in results. If it does not:
@@ -421,7 +406,7 @@ Confirm the new page appears in results. If it does not:
 2. Run a full reindex:
 
 ```bash
-wikiform search index --full
+wikiform --vault-root "<WIKI_ROOT>" search index
 ```
 
 3. If the full reindex does not resolve it, log the failure and proceed - do not block ingestion on search index failure.
@@ -432,6 +417,7 @@ Log the failure and proceed:
 
 ```markdown
 ## [<today>] search-deferred | <source slug>
+
 Search index not updated: <error or reason>
 Affected pages: <list of slugs from steps 6 and 7>
 ```
@@ -493,6 +479,7 @@ If the overview has more than 10 entries in "Key Entities / Concepts" or more th
 
 ```markdown
 ## [<today>] overview-review-needed | <source slug>
+
 Overview has <N> entities and <N> open questions. Consider a dedicated overview rewrite pass.
 ```
 
@@ -519,6 +506,7 @@ Check that the raw file still exists at the path recorded in step 1. If it has b
 
 ```markdown
 ## [<today>] raw-missing | <source slug>
+
 Raw file not found at original path: <path>
 Wiki pages produced: <list of slugs>
 ```
@@ -529,19 +517,23 @@ Wiki pages produced: <list of slugs>
 ---
 title: <unchanged>
 source_type: <unchanged>
+source_url: <unchanged - only if present>
+source_file: <unchanged - only if present>
 status: ingested
 slug: <slug generated in step 5>
 ingested_date: <today>
 ingested_to:
-  - <source summary page slug from step 6>
-  - <entity/concept page slug 1 from step 7>
-  - <entity/concept page slug 2 from step 7>
-  - <...all pages created or updated in steps 6 and 7>
+    - <source summary page slug from step 6>
+    - <entity/concept page slug 1 from step 7>
+    - <entity/concept page slug 2 from step 7>
+    - <...all pages created or updated in steps 6 and 7>
 added: <unchanged>
 ---
 ```
 
-**For binary files** (`.pdf`, `.png`, `.jpg`, etc.) - update the sidecar file at `<same path>/<filename>.meta.yaml`:
+Files produced by `wikiform extract` (including PDFs and images) always have a markdown companion - update its frontmatter as above and leave the preserved original (`source_file`) untouched. Keep every existing frontmatter field; only change the ones listed.
+
+**For binary files with no markdown companion** (`.pdf`, `.png`, `.jpg`, etc.) - update the sidecar file at `<same path>/<filename>.meta.yaml`:
 
 ```yaml
 title: <unchanged>
@@ -550,10 +542,10 @@ status: ingested
 slug: <slug generated in step 5>
 ingested_date: <today>
 ingested_to:
-  - <source summary page slug from step 6>
-  - <entity/concept page slug 1 from step 7>
-  - <entity/concept page slug 2 from step 7>
-  - <...all pages created or updated in steps 6 and 7>
+    - <source summary page slug from step 6>
+    - <entity/concept page slug 1 from step 7>
+    - <entity/concept page slug 2 from step 7>
+    - <...all pages created or updated in steps 6 and 7>
 added: <unchanged>
 ```
 
@@ -587,26 +579,32 @@ Compute `INGESTS_SINCE_LINT` using the procedure defined at the top of this docu
 **Ingests since last lint:** <INGESTS_SINCE_LINT>
 
 ### Pages created
+
 - [[slug]] - <one clause on what this page covers>
 
 ### Pages updated
+
 - [[slug]] - <one clause on what changed and why>
 
 ### Entity/concept pages
+
 - [[slug]] - <created | updated | stub created> - <one clause on why>
 
 ### Overview changes
+
 - Current Understanding: <updated | unchanged> - <one clause on what changed if updated>
 - Key Entities / Concepts: <N added> - <list of [[slug]] added>
 - Open Questions: <N added, N removed> - <list of questions added or removed>
 
 ### Deferred items
+
 - <item> - <reason deferred> - <step that generated this deferral>
-<if none, omit section>
+  <if none, omit section>
 
 ### Errors
+
 - <error description> - <step where it occurred> - <how it was handled>
-<if none, omit section>
+  <if none, omit section>
 ```
 
 If there are no deferred items, omit the `### Deferred items` section. If there are no errors, omit the `### Errors` section.
@@ -625,25 +623,31 @@ All deferred item log entries written during steps 8, 9, 10, and 11 are supersed
 **Slug:** [[attention-is-all-you-need]]
 
 ### Pages created
+
 - [[attention-is-all-you-need]] - source summary page for the transformer architecture paper
 
 ### Pages updated
+
 - [[sequence-to-sequence]] - added transformer as a successor architecture
 
 ### Entity/concept pages
+
 - [[transformer]] - created - primary architecture introduced by this source
 - [[multi-head-attention]] - created - key mechanism described in detail
 - [[positional-encoding]] - stub created - mentioned in passing, not fully defined
 
 ### Overview changes
+
 - Current Understanding: updated - transformer architecture replaces RNN as dominant sequence model
 - Key Entities / Concepts: 2 added - [[transformer]], [[multi-head-attention]]
 - Open Questions: 1 added - Does positional encoding generalise beyond fixed sequence lengths?
 
 ### Deferred items
+
 - [[sequence-to-sequence]] warning: missing required section - step 8 - deferred to lint pass
 
 ### Errors
+
 - Search index incremental run failed - step 10 - full reindex scheduled
 ```
 
@@ -702,8 +706,7 @@ Based on what was produced, suggest 1-3 concrete follow-on actions. Choose only 
 - **Expand stub:** `[[slug]]` was created as a stub - consider ingesting a dedicated source for it.
 - **Resolve contradiction:** `[[slug]]` contradicts `[[slug]]` - consider reviewing and updating one or both pages.
 - **Resolve open question:** <question> was added to the overview - consider ingesting a source that addresses it.
-- **Run lint pass:** <N> warnings were deferred in step 8. Run: `pyenv activate obsidian && wikiform lint` (or `wikiform lint` if pyenv is unavailable).
-- **Run full reindex:** Search index incremental run failed in step 10 - run ` index --full`.
-
+- **Run lint pass:** <N> warnings were deferred in step 8. Run: `wikiform --vault-root "<WIKI_ROOT>" lint`.
+- **Run full reindex:** Search index incremental run failed in step 10 - run `wikiform --vault-root "<WIKI_ROOT>" search index` (no `--incremental`).
 
 **Lint reminder rule:** Include "Run lint pass" in suggested next steps if and only if `INGESTS_SINCE_LINT` ≥ 5. Do not include it otherwise.

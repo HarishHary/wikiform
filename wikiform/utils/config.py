@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
 from pathlib import Path
 
 from loguru import logger
@@ -14,39 +13,28 @@ DEFAULT_REQUIRED_FIELDS: frozenset[str] = frozenset({"title", "tags", "updated"}
 OPTIONAL_FIELDS: frozenset[str] = frozenset({"sources", "type"})
 
 
-@dataclass
-class SchemaConfig:
-    categories: list[str]
-    required_fields: frozenset[str]
-
-
 def _parse_categories(text: str) -> list[str]:
     match = re.search(r"## Index Categories\n(.*?)(?=\n## |\Z)", text, re.DOTALL)
     if not match:
         logger.debug("No '## Index Categories' section found in SCHEMA.md")
         return []
-    categories = [
-        line.strip().lstrip("-").strip()
-        for line in match.group(1).splitlines()
-        if line.strip().lstrip("-").strip()
-    ]
+    categories = []
+    for line in match.group(1).splitlines():
+        name = re.sub(r"^[-*]\s+", "", line.strip()).strip()  # drop one bullet marker, keep dashes inside names
+        if name:
+            categories.append(name)
     logger.debug("Read {} categories from SCHEMA.md: {}", len(categories), categories)
     return categories
 
 
 def _parse_required_fields(text: str) -> frozenset[str]:
-    match = re.search(
-        r"## (?:Wiki )?Page Frontmatter.*?```ya?ml(.*?)```", text, re.DOTALL
-    )
+    match = re.search(r"## (?:Wiki )?Page Frontmatter.*?```ya?ml(.*?)```", text, re.DOTALL)
     if not match:
         logger.debug("No Page Frontmatter block found in SCHEMA.md, using defaults")
         return DEFAULT_REQUIRED_FIELDS
 
-    fields: set[str] = set()
-    for line in match.group(1).splitlines():
-        m = re.match(r"\s*([a-z_]+)\s*:", line)
-        if m:
-            fields.add(m.group(1))
+    # Only top-level keys (column 0): indented lines belong to nested values, not required fields.
+    fields = set(re.findall(r"^([A-Za-z_][\w-]*)\s*:", match.group(1), re.MULTILINE))
 
     if not fields:
         logger.debug("No fields parsed from SCHEMA.md frontmatter block, using defaults")
@@ -62,7 +50,7 @@ def _read_schema_text(vault_root: Path) -> str | None:
     if not schema_path.exists():
         logger.debug("SCHEMA.md not found at {}", schema_path)
         return None
-    return schema_path.read_text(encoding="utf-8")
+    return schema_path.read_text(encoding="utf-8").replace("\r\n", "\n")
 
 
 def read_schema_categories(vault_root: Path) -> list[str]:
@@ -78,14 +66,3 @@ def read_schema_required_fields(vault_root: Path) -> frozenset[str]:
         logger.debug("Using default required fields: {}", DEFAULT_REQUIRED_FIELDS)
         return DEFAULT_REQUIRED_FIELDS
     return _parse_required_fields(text)
-
-
-def load_schema(vault_root: Path) -> SchemaConfig:
-    """Load all schema configuration in one file read."""
-    text = _read_schema_text(vault_root)
-    if text is None:
-        return SchemaConfig(categories=[], required_fields=DEFAULT_REQUIRED_FIELDS)
-    return SchemaConfig(
-        categories=_parse_categories(text),
-        required_fields=_parse_required_fields(text),
-    )

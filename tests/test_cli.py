@@ -145,3 +145,28 @@ def test_search_index_outputs_json_fields(vault: Path):
     data = json.loads(result.stdout)
     for key in ("vault_root", "incremental", "generated_at", "indexed", "skipped", "deleted", "total"):
         assert key in data, f"Missing key: {key}"
+
+
+# ─── vault-root handling ──────────────────────────────────────────────────────
+
+def test_cli_without_any_arguments_prints_help():
+    result = CliRunner().invoke(cli, [])
+    assert result.exit_code == 0
+    assert "Usage:" in result.output
+
+
+def test_subcommand_without_vault_root_exits_2():
+    result = CliRunner().invoke(cli, ["lint"])
+    assert result.exit_code == 2
+
+
+def test_subcommand_with_nonexistent_vault_root_exits_2(tmp_path: Path):
+    result = CliRunner().invoke(cli, ["--vault-root", str(tmp_path / "nope"), "index"])
+    assert result.exit_code == 2
+
+
+def test_output_option_writes_json_file(vault: Path, tmp_path: Path):
+    out = tmp_path / "nested" / "report.json"
+    result = invoke(vault, "index", "-o", str(out))
+    assert result.exit_code == 0
+    assert json.loads(out.read_text(encoding="utf-8"))["articles_scanned"] == 0

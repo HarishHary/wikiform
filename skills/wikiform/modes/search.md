@@ -1,25 +1,13 @@
----
-name: wiki-query
-description: Use when asking a question against a personal wiki built with wiki-init and wiki-ingest. Do not answer from general knowledge - always read the wiki pages first.
----
-
 # Wiki Query
 
 Ask a question. Read the wiki. Synthesize with citations. Offer to file the answer back.
 
 ## Pre-condition
 
-Before doing anything, run `which wikiform`. If not found, tell the user to run `pipx install wikiform` and stop.
-
-Search for `SCHEMA.md` in this order:
-
-1. Current directory
-2. Each parent directory, up to 3 levels up
-3. Stop at the first match
-
-If not found, tell the user to run `wiki-init` first and stop.
+Follow `_shared.md`: binary check, vault root resolution (`<WIKI_ROOT>`), and how to invoke the CLI (`--vault-root` goes before the subcommand). If no vault is found, tell the user to run init first and stop.
 
 Read `SCHEMA.md` to extract:
+
 - `Path` - absolute wiki root path
 - `Index Categories` - valid category names
 - `Cross-References` - wikilink convention (`[[slug]]`)
@@ -28,7 +16,7 @@ Read `SCHEMA.md` to extract:
 **Empty wiki check:** After reading `SCHEMA.md`, verify that `wiki/index.md` exists and contains at least one entry. If the index is empty or the file is missing, tell the user:
 
 > "The wiki has no pages yet. Run `wiki-ingest` to add sources before querying."
-Then stop.
+> Then stop.
 
 ## Workflow
 
@@ -44,7 +32,16 @@ Read `wiki/index.md` in full. For each listed page, assign a relevance score:
 | 1     | Title or summary shares a significant term with the question         |
 | 0     | No apparent connection                                               |
 
+**Supplement with the search index.** The index lists one-line summaries only, so also run a keyword search for the question's key terms (skip if `_meta/vault-search.db` does not exist - tell the user `wikiform search index` has not been run):
+
+```bash
+wikiform --vault-root "<WIKI_ROOT>" search query "<key terms>" --json --limit 10
+```
+
+If the vault has embeddings (`search embed` was run before), also run the same query with `--semantic`. Add `--tag <tag>` or `--dir wiki/pages/` to narrow results. Score every hit with the same 0/1/2 rubric using its `title`, `tags` and `snippet`, and merge it with the index-based candidates. The search index only reflects the last `search index` run, so the index file remains the source of truth for what exists.
+
 Collect all pages with score ≥ 1. If no pages score ≥ 1, widen to any page whose category matches the question's domain. If still none, tell the user:
+
 > "No pages in the wiki appear relevant to this question. The wiki may not yet cover this topic."
 
 Then stop - do not answer from general knowledge.
@@ -56,11 +53,12 @@ Read all pages with score 2 first, then score 1 pages. For each page read, apply
 **Link traversal rule:**
 
 For each `[[slug]]` link found in a page's body:
+
 - Check whether that slug is already in your read list.
 - If not: score it against the question using the same 0/1/2 criteria.
 - If score ≥ 1: add it to the read list.
 - If score 0: do not follow it.
-Traversal depth is exactly one level. Do not follow links found in pages that were themselves added via traversal - only follow links found in the directly relevant pages from step 1.
+  Traversal depth is exactly one level. Do not follow links found in pages that were themselves added via traversal - only follow links found in the directly relevant pages from step 1.
 
 **Read limit:** If the read list exceeds 20 pages, stop adding and note: "Query scope is large - results may be incomplete. Consider narrowing the question or running `wiki-lint` to check index coverage."
 
@@ -75,8 +73,8 @@ Write a response that:
 - Notes agreements between pages explicitly when two or more pages support the same claim
 - Notes disagreements explicitly when pages conflict: "[[page-a]] states X; [[page-b]] states Y - see open question below"
 - Flags every gap using one of these forms:
-  - "The wiki has no page on X." - when a concept is referenced but has no page
-  - "[[page]] does not cover Y." - when a relevant page exists but is silent on a specific aspect
+    - "The wiki has no page on X." - when a concept is referenced but has no page
+    - "[[page]] does not cover Y." - when a relevant page exists but is silent on a specific aspect
 - Lists suggested follow-up actions (ingest targets or open questions) at the end, not inline
 
 Format by question type:
@@ -111,7 +109,7 @@ Present each gap in order. Wait for the user's response before presenting the ne
 > "Gap: The wiki has no page on `<topic>`.
 > Options: (1) create a stub now, (2) ingest a source - suggest query: `<suggested search terms>`, (3) skip"
 
-- **Option 1 - create stub:** Create `wiki/pages/<slug>.md` using the stub template from `wiki-ingest` Rule C. Add to `wiki/index.md` under the most relevant category. Log as `ingest | stub created: [[slug]]`.
+- **Option 1 - create stub:** Create `wiki/pages/<slug>.md` using the stub template from `wiki-ingest` Rule C. Regenerate the indexes with `wikiform --vault-root "<WIKI_ROOT>" index` (never hand-edit `wiki/index.md`; a plugin hook blocks it). Log as `ingest | stub created: [[slug]]`.
 - **Option 2 - ingest:** Hand off to `wiki-ingest` with the suggested source or search terms.
 - **Option 3 - skip:** Note the gap in the log entry only.
 
@@ -143,16 +141,13 @@ updated: <today YYYY-MM-DD>
 
 Page body: the full synthesis from step 3, verbatim. Do not summarise or rewrite.
 
-Add entry to `wiki/index.md` under the chosen primary category:
-
-```markdown
-- [[slug]] - <one-line summary of the question answered>
-```
+Then regenerate the indexes with `wikiform --vault-root "<WIKI_ROOT>" index` so the page is listed under its primary category (never hand-edit `wiki/index.md`; a plugin hook blocks it). The index entry uses the page's `summary` frontmatter field if present, otherwise its first prose line - so start the page body with a one-line summary of the question answered.
 
 Append to `wiki/log.md` using the format defined in `SCHEMA.md`:
 
 ```markdown
 ## [<today>] query | <question summary>
+
 Filed as: [[<slug>]]
 Sources consulted: <N> pages
 Gaps: <N flagged>, <N resolved>, <N skipped>
@@ -162,6 +157,7 @@ If no, append to `wiki/log.md`:
 
 ```markdown
 ## [<today>] query | <question summary>
+
 Not filed.
 Sources consulted: <N> pages
 Gaps: <N flagged>, <N resolved>, <N skipped>

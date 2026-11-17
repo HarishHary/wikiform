@@ -1,0 +1,15 @@
+{
+    "name": "Wikiform",
+    "owner": {
+        "name": "HarishHary"
+    },
+    "description": "Claude Code plugin for managing Obsidian-style markdown knowledge vaults: extract, index, search, lint.",
+    "plugins": [
+        {
+            "name": "wikiform",
+            "description": "Manage an Obsidian-style markdown wiki vault: bootstrap, ingest sources, search, lint, and update pages via the wikiform CLI.",
+            "version": "1.0.0",
+            "source": "./"
+        }
+    ]
+}

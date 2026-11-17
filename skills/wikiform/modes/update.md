@@ -1,22 +1,13 @@
----
-name: wiki-update
-description: Use when revising existing wiki pages because knowledge has changed, a new piece of information updates or contradicts existing content, or the user wants to directly edit wiki content with LLM assistance.
----
-
 # Wiki Update
 
 Revise existing wiki pages. Always show diffs before writing. Always log. Always cite the source of new information.
 
 ## Pre-condition
 
-Search for `SCHEMA.md` in this order:
-1. Current directory
-2. Each parent directory, up to 3 levels up
-3. `~/wikis/`
-
-Stop at the first match. If not found, tell the user to run `wiki-init` first and stop.
+Follow `_shared.md`: binary check, vault root resolution (`<WIKI_ROOT>`), and how to invoke the CLI (`--vault-root` goes before the subcommand). If no vault is found, tell the user to run init first and stop.
 
 Read `SCHEMA.md` to extract:
+
 - `Path` - absolute wiki root path
 - `Index Categories` - valid category names
 - `Tag Rules` - valid primary tags and constraints
@@ -36,15 +27,17 @@ The user provides a fact, URL, file, or description of changed knowledge. Before
 
 1. Read `wiki/index.md` in full.
 2. Score each page for relevance using the same 0/1/2 scoring from `wiki-query`:
-   - 2: title or summary directly names an entity or concept in the new information
-   - 1: title or summary shares a significant term
-   - 0: no apparent connection
+    - 2: title or summary directly names an entity or concept in the new information
+    - 1: title or summary shares a significant term
+    - 0: no apparent connection
 3. Read all pages scoring ≥ 1.
 4. Proceed to step 2 with the affected pages identified.
+
 **Trigger C - lint report:**
 The user provides a lint report from `wiki-lint`. This skill handles only content-level recommendations - items that require reading and rewriting page body text. Structural fixes (broken links, missing frontmatter, orphans, naming) belong to `wiki-lint`'s own fix flow.
 
 Filter the lint report to these checks only:
+
 - W2 contradiction
 - W3 stale claim
 - W4 stale stub (expand only - do not just remove the stub tag)
@@ -57,8 +50,10 @@ Work through filtered items in priority order: W2 first, then W3, then W4, then 
 Before proposing any edits, assess the credibility of the new information relative to what the wiki already contains.
 
 For each affected page, check whether it already has a sourced claim on the same topic:
+
 - Read the page's `sources:` frontmatter field.
 - Read the `## Evidence` section if present.
+
 Then classify the update as one of:
 
 | Class           | Condition                                                              | Action                                                                |
@@ -105,6 +100,7 @@ Source: <URL, file path, or description - required; do not omit>
 ```
 
 Rules for the diff format:
+
 - Always include the line number of the change (`line <N>`).
 - Always include 1-2 lines of surrounding context so the location is unambiguous.
 - For multi-line replacements, show the full block in both current and proposed sections.
@@ -114,6 +110,7 @@ Rules for the diff format:
 **Frontmatter validation:**
 
 If the proposed edit changes any frontmatter field, validate the new values against `SCHEMA.md` before showing the diff:
+
 - `tags[0]` must be one of the Index Categories.
 - `type` must be one of: `paper | article | code | repo | image | dataset | entity | concept | analysis | other`.
 - `updated` must be today's date in `YYYY-MM-DD` format.
@@ -175,13 +172,29 @@ Do not write any page that has not received explicit confirmation in step 3.
 
 After all page writes are complete, update the three index files for any page whose title, primary tag, or one-line summary changed.
 
-**`wiki/index.md`:** Update the one-line entry under the page's category. If the primary tag changed, move the entry to the new category.
+The index script (below) regenerates all three files from the pages, so the entries follow automatically:
 
-**`wiki/tag-index.md`:** If tags were added or removed, add or remove the page's entry under the affected tag headings. If a tag heading no longer has any entries, remove the heading.
+- **`wiki/index.md`** - one-line entry under the page's primary category (moves if the primary tag changed).
+- **`wiki/tag-index.md`** - entries under each of the page's tags; tag headings with no pages disappear.
+- **`wiki/master-index.md`** - entry under the title's first letter (moves if the title changed).
 
-**`wiki/master-index.md`:** If the page title changed, move the entry to the correct letter heading. Update the one-line summary if it changed.
+Do not hand-edit these files; a plugin hook blocks it.
 
-Run `wikiform index` if available to perform these updates automatically. If unavailable, apply manually. Log script failures as `lint-deferred` per the `wiki-ingest` convention.
+Run the index script:
+
+```bash
+wikiform --vault-root "<WIKI_ROOT>" index
+```
+
+If it fails, do not hand-edit the index files (a plugin hook blocks it): fix the cause (usually malformed page frontmatter - see `lint`), re-run, and otherwise log the failure as `lint-deferred` per the `wiki-ingest` convention.
+
+Then refresh the search index so edited pages are searchable (this also re-indexes downstream pages written in step 5):
+
+```bash
+wikiform --vault-root "<WIKI_ROOT>" search index --incremental
+```
+
+If the vault uses semantic search (embeddings were generated before), also run `wikiform --vault-root "<WIKI_ROOT>" search embed --incremental`. On failure, log `search-deferred` per the `wiki-ingest` convention and continue.
 
 ### 7. Update `wiki/overview.md`
 

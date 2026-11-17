@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import contextlib
-import json
 import re
 import sqlite3
 from dataclasses import asdict, dataclass
@@ -12,9 +11,10 @@ from loguru import logger
 from rich.console import Console
 from rich.table import Table
 
+from wikiform.utils.cli_helpers import emit_json, resolve_vault_root
 from wikiform.utils.db import db_path, get_connection, sanitize_fts_query
-from wikiform.utils.embedder import Embedder
-from wikiform.utils.vec_db import load_sqlite_vec, serialize_vector
+from wikiform.utils.embedder import DEFAULT_MODEL, Embedder
+from wikiform.utils.vec_db import get_vec_meta, is_legacy_vec_table, load_sqlite_vec, serialize_vector
 
 logger = logger.bind(service="Wikiform - Query")
 console = Console()
@@ -43,21 +43,42 @@ _SEARCH_SQL = """
     WHERE articles_fts MATCH ?
 """
 
+# Vectors are stored per chunk; collapse to the best-matching chunk per article.
 _SEMANTIC_SQL = """
     SELECT
-        v.rowid,
-        v.distance,
         a.path,
         a.title,
         a.tags,
         a.updated,
-        a.content
+        a.content,
+        MIN(v.distance) AS distance
     FROM articles_vec v
-    JOIN articles a ON a.id = v.rowid
+    JOIN vec_chunks c ON c.chunk_id = v.rowid
+    JOIN articles a ON a.id = c.article_id
     WHERE v.embedding MATCH ?
       AND k = ?
-    ORDER BY v.distance
 """
+
+_KNN_OVERFETCH = 5
+_KNN_MAX_K = 1000
+
+
+def _like_escape(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def _filter_clauses(tag: str | None, directory: str | None) -> tuple[str, list[str]]:
+    """SQL fragment (starting with AND) and params for the --tag / --dir filters on the articles table."""
+    sql = ""
+    params: list[str] = []
+    if tag:
+        # tags are stored as "a, b, c": match a whole tag, case-insensitively
+        sql += " AND (', ' || LOWER(a.tags) || ', ') LIKE ? ESCAPE '\\'"
+        params.append(f"%, {_like_escape(tag.strip().lower())}, %")
+    if directory:
+        sql += " AND a.path LIKE ? ESCAPE '\\'"
+        params.append(f"{_like_escape(directory)}%")
+    return sql, params
 
 
 def _content_snippet(content: str, max_len: int = 200) -> str:
@@ -71,16 +92,25 @@ def _content_snippet(content: str, max_len: int = 200) -> str:
 def run_semantic_query(
     vault_root: Path,
     query: str,
+    tag: str | None = None,
+    directory: str | None = None,
     limit: int = 20,
 ) -> list[SearchResult]:
-    embedder = Embedder()
-    vector = embedder.embed(query)
-    blob = serialize_vector(vector)
+    filter_sql, filter_params = _filter_clauses(tag, directory)
+    # Several chunks can belong to one article, and filters apply after KNN: over-fetch chunks.
+    k = min(limit * _KNN_OVERFETCH, _KNN_MAX_K)
 
     with contextlib.closing(get_connection(vault_root)) as db:
         load_sqlite_vec(db)
+        if is_legacy_vec_table(db):
+            raise ValueError("Vector index predates chunking. Run 'wikiform search embed --reset'.")
+        # Query with the same model the vectors were built with.
+        model = get_vec_meta(db, "model") or DEFAULT_MODEL
+        blob = serialize_vector(Embedder(model).embed_query(query))
+
+        sql = _SEMANTIC_SQL + filter_sql + " GROUP BY a.id ORDER BY distance LIMIT ?"
         try:
-            rows = db.execute(_SEMANTIC_SQL, (blob, limit)).fetchall()
+            rows = db.execute(sql, (blob, k, *filter_params, limit)).fetchall()
         except sqlite3.OperationalError as err:
             raise ValueError(str(err)) from err
 
@@ -108,20 +138,9 @@ def run_query(
     if not safe_query:
         return []
 
-    sql = _SEARCH_SQL
-    params: list[str | int] = [safe_query]
-
-    if tag:
-        safe_tag = tag.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-        sql += " AND a.tags LIKE ? ESCAPE '\\'"
-        params.append(f"%{safe_tag}%")
-    if directory:
-        safe_dir = directory.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-        sql += " AND a.path LIKE ? ESCAPE '\\'"
-        params.append(f"{safe_dir}%")
-
-    sql += " ORDER BY rank LIMIT ?"
-    params.append(limit)
+    filter_sql, filter_params = _filter_clauses(tag, directory)
+    sql = _SEARCH_SQL + filter_sql + " ORDER BY rank LIMIT ?"
+    params: list[str | int] = [safe_query, *filter_params, limit]
 
     with contextlib.closing(get_connection(vault_root)) as db:
         try:
@@ -144,7 +163,7 @@ def run_query(
 
 @click.command("query", help="Search indexed wiki pages. Defaults to FTS5 keyword search; use --semantic for vector search (run 'search embed' first).")
 @click.argument("query")
-@click.option("--tag", default=None, help="Filter by tag (substring match)")
+@click.option("--tag", default=None, help="Filter by tag (exact tag, case-insensitive)")
 @click.option("--dir", "directory", default=None, help="Filter by path prefix")
 @click.option("--limit", default=20, show_default=True, type=click.IntRange(1, 100), help="Max results (1-100)")
 @click.option("--semantic", is_flag=True, default=False, help="Semantic vector search. Run 'search embed' first to generate embeddings.")
@@ -152,15 +171,7 @@ def run_query(
 @click.option("-o", "--output", type=click.Path(dir_okay=False, path_type=Path), default=None, help="Write JSON results to file")
 @click.pass_context
 def query_cmd(ctx: click.Context, query: str, tag: str | None, directory: str | None, limit: int, semantic: bool, as_json: bool, output: Path | None) -> None:
-    vault_root = ctx.obj.get("vault_root")
-    if not vault_root:
-        logger.error("Vault root path not provided in context")
-        raise SystemExit(2)
-
-    root = Path(vault_root).resolve()
-    if not root.exists():
-        logger.error("Vault root does not exist: {}", root)
-        raise SystemExit(2)
+    root = resolve_vault_root(ctx)
 
     if not db_path(root).exists():
         logger.error("No index found. Run 'wikiform search index' first.")
@@ -169,7 +180,7 @@ def query_cmd(ctx: click.Context, query: str, tag: str | None, directory: str | 
     if semantic:
         logger.debug("Semantic query: {!r}", query)
         try:
-            results = run_semantic_query(root, query, limit=limit)
+            results = run_semantic_query(root, query, tag=tag, directory=directory, limit=limit)
         except ValueError as err:
             logger.error("Search error: {}", err)
             raise SystemExit(1) from err
@@ -186,15 +197,8 @@ def query_cmd(ctx: click.Context, query: str, tag: str | None, directory: str | 
 
     serialized = [asdict(r) for r in results]
 
-    if output:
-        rendered = json.dumps(serialized, indent=2, ensure_ascii=False)
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(rendered + "\n", encoding="utf-8")
-        logger.info("Wrote {} result(s) to {}", len(results), output)
-        return
-
-    if as_json:
-        click.echo(json.dumps(serialized, indent=2, ensure_ascii=False))
+    if output or as_json:
+        emit_json(serialized, output, label=f"{len(results)} result(s)")
         return
 
     if not results:

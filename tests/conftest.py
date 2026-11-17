@@ -44,3 +44,35 @@ def vault(tmp_path: Path) -> Path:
     (tmp_path / "_meta").mkdir()
     (tmp_path / "SCHEMA.md").write_text(SCHEMA_MD, encoding="utf-8")
     return tmp_path
+
+
+class FakeEmbedder:
+    """Deterministic bag-of-words embedder (8 dims) so vector tests need no model download."""
+
+    DIM = 8
+
+    def __init__(self, model_name: str = "fake-model") -> None:
+        self.model_name = model_name
+
+    @property
+    def dimension(self) -> int:
+        return self.DIM
+
+    def embed(self, text: str) -> list[float]:
+        vec = [0.0] * self.DIM
+        for word in text.lower().split():
+            vec[sum(map(ord, word.strip(".,"))) % self.DIM] += 1.0
+        return vec
+
+    def embed_many(self, texts: list[str], batch_size: int = 32) -> list[list[float]]:
+        return [self.embed(t) for t in texts]
+
+    def embed_query(self, query: str) -> list[float]:
+        return self.embed(query)
+
+
+@pytest.fixture
+def fake_embedder(monkeypatch: pytest.MonkeyPatch) -> type[FakeEmbedder]:
+    monkeypatch.setattr("wikiform.cmd.embed.Embedder", FakeEmbedder)
+    monkeypatch.setattr("wikiform.cmd.query.Embedder", FakeEmbedder)
+    return FakeEmbedder

@@ -1,28 +1,16 @@
----
-name: wiki-lint
-description: Use when auditing a wiki for health issues - contradictions between pages, orphan pages, broken cross-references, stale claims, missing pages, or coverage gaps. Run after every 5-10 ingests.
----
-
 # Wiki Lint
 
 Audit the wiki. Produce a categorised report. Offer concrete fixes. Log the operation.
 
 ## Pre-condition
 
-Before doing anything, run `which wikiform`. If not found, tell the user to run `pipx install wikiform` and stop.
-
-Search for `SCHEMA.md` in this order:
-
-1. Current directory
-2. Each parent directory, up to 3 levels up
-3. Stop at the first match
-
-If not found, tell the user to run `wiki-init` first and stop.
+Follow `_shared.md`: binary check, vault root resolution (`<WIKI_ROOT>`), and how to invoke the CLI (`--vault-root` goes before the subcommand). If no vault is found, tell the user to run init first and stop.
 
 Read `SCHEMA.md` to extract:
-- `Path` — absolute wiki root path
-- `Index Categories` — valid category names
-- Required frontmatter fields — from the Page Frontmatter block
+
+- `Path` - absolute wiki root path
+- `Index Categories` - valid category names
+- Required frontmatter fields - from the Page Frontmatter block
 
 ## Ingest count calculation
 
@@ -41,7 +29,7 @@ Before running any lint checks, scan `wiki/log.md` for `overview-review-needed` 
 
 > "Outstanding: `overview-review-needed` was logged on `<date>` for `[[<slug>]]`. Consider running a dedicated overview rewrite pass after this lint session."
 
-This is informational only — do not block lint on it.
+This is informational only - do not block lint on it.
 
 ## Workflow
 
@@ -50,10 +38,13 @@ This is informational only — do not block lint on it.
 **First, run `wikiform lint`:**
 
 ```bash
-wikiform lint --vault-root <WIKI_ROOT> --output /tmp/vault-lint-result.json
+wikiform --vault-root "<WIKI_ROOT>" lint --output /tmp/vault-lint-result.json
 ```
 
+Exit code `1` is **expected** when the report contains errors - the file is still written. Exit code `2` (bad vault root, unknown check) means no report was produced: stop and show the error.
+
 Read the JSON output from `/tmp/vault-lint-result.json`. Extract and store:
+
 - `summary.files_scanned` - total files scanned
 - `issues` - the full list of findings, each with `type`, `check`, `file`, `message`
 
@@ -64,7 +55,7 @@ Read the JSON output from `/tmp/vault-lint-result.json`. Extract and store:
 | `broken_link`      | `broken_link`         | E1                                   |
 | `frontmatter`      | `missing_frontmatter` | E2                                   |
 | `orphan`           | `orphan`              | W1                                   |
-| `cross_refs`       | `missing_cross_ref`   | I3                                   |
+| `missing_cross_ref` | `missing_cross_ref`  | I3                                   |
 | `naming`           | `naming`              | no wiki-lint equivalent - keep as-is |
 | `empty`            | `empty`               | no wiki-lint equivalent - keep as-is |
 | `stale_raw`        | `stale_raw`           | no wiki-lint equivalent - keep as-is |
@@ -76,7 +67,7 @@ Store all imported findings in the findings list. These are treated identically 
 
 **Then, build the LLM inventory:**
 
-Read the following files to support the semantic checks in step 2. The structural checks (broken links, missing frontmatter, orphans, naming, empty, stale_raw, tag_consistency, cross_refs) are already covered by `wikiform lint` - do not re-run them.
+Read the following files to support the semantic checks in step 2. The structural checks (broken links, missing frontmatter, orphans, naming, empty, stale_raw, tag_consistency, missing_cross_ref) are already covered by `wikiform lint` - do not re-run them.
 
 **Files to read:**
 
@@ -125,6 +116,7 @@ Read the `## Open Questions` section. Each bullet is one question.
 **Inventory health check:**
 
 Before proceeding to step 2, verify:
+
 - `wikiform lint` output was read successfully. If not, stop.
 - `wiki/pages/` exists and is not empty. If empty, tell the user and stop.
 - `wiki/overview.md` exists. If not, warn and skip I2 - coverage gaps.
@@ -180,6 +172,7 @@ Skip if `raw/` was absent at inventory time.
 For each pair of pages that share at least one tag, compare `body_text` for conflicting claims about the same named entity.
 
 Heuristic - flag if both of the following are true:
+
 1. Both pages mention the same named entity - a proper noun or `[[slug]]` that appears in both `body_text` fields.
 2. Both pages make a quantitative or categorical claim about that entity - a number, date, count, classification, or relationship - and the claims differ.
 
@@ -293,7 +286,7 @@ Combine step 2 findings with the imported `wikiform lint` findings from step 1 i
 
 ```yaml
 Checks complete: <N> errors, <N> warnings, <N> info
-  - <N> from wikiform lint, <N> from semantic checks
+    - <N> from wikiform lint, <N> from semantic checks
 ```
 
 ### 3. Write the lint report
@@ -326,15 +319,16 @@ generated_by: wiki-lint
 
 ## Summary
 
-| Severity   | Count | Source              |
-| ---------- | ----- | ------------------- |
+| Severity    | Count | Source              |
+| ----------- | ----- | ------------------- |
 | 🔴 Errors   | N     | <N> script, <N> LLM |
 | 🟡 Warnings | N     | <N> script, <N> LLM |
 | 🔵 Info     | N     | <N> script, <N> LLM |
 
 <if all counts are zero, write instead:>
+
 > ✅ No issues found. Wiki is healthy.
-<then omit all check sections below>
+> <then omit all check sections below>
 
 ---
 
@@ -351,6 +345,7 @@ I1 missing_concept_page, I2 coverage_gap, I3 missing_cross_ref>
   → Fix: <fix>
 
 <for wiki-wide findings where page is empty, omit the page link:>
+
 - <message>
   → Fix: <fix>
 
@@ -370,6 +365,7 @@ I1 missing_concept_page, I2 coverage_gap, I3 missing_cross_ref>
 ```
 
 **Rendering rules:**
+
 - Sort findings within each check section alphabetically by page slug.
 - Do not truncate findings - every finding must appear in the report.
 - Trend counts are read from the previous report's `## Summary` table - do not re-run checks.
@@ -389,6 +385,7 @@ Present one offer at a time. Wait for the user's response before presenting the 
 **Fix offer format:**
 
 For each offer, present:
+
 1. The check name and finding count
 2. A one-sentence description of what will be changed
 3. The exact diff for each affected file in before/after block format:
@@ -423,11 +420,13 @@ Do not apply any fix without explicit confirmation. Do not batch multiple file c
 **Fix offers by check, in presentation order:**
 
 **E1 - Broken links**
+
 > "Found <N> broken wikilinks across <N> pages. I can remove each broken `[[slug]]` reference. I'll show each change before writing."
 
 Show one diff per page. If a page has multiple broken links, show all in one diff block for that page, confirmed together.
 
 **E2 - Missing frontmatter**
+
 > "Found <N> pages with missing required frontmatter fields. I can add placeholder values for each missing field."
 
 Placeholder values:
@@ -443,16 +442,19 @@ Placeholder values:
 Show one diff per page.
 
 **E3 - Broken source references**
+
 > "Found <N> pages referencing raw files that don't exist. I can remove the stale source slugs from each page's `sources` field."
 
 Show one diff per page.
 
 **W1 - Orphan pages**
+
 > "Found <N> pages with no inbound links. For each one, I'll suggest the most relevant page to add a link from, based on shared tags."
 
 For each orphan, identify the page in the page registry that shares the most tags with it. Show a diff adding `[[orphan-slug]]` to that page's `## Connections` section. If no tag-sharing page exists, note: "No obvious link target found - manual review required."
 
 **W2 - Contradictions**
+
 > "Found <N> possible contradictions. These require manual review - I cannot auto-fix them. I'll show each one and ask which claim to keep."
 
 For each contradiction finding, show:
@@ -474,31 +476,37 @@ Ask: **"Which is correct: (a) / (b) / neither - I'll update manually / skip"**
 - **skip** - move to next contradiction.
 
 **W3 - Stale claims**
+
 > "Found <N> pages with potentially stale claims. I can add an 'as of <updated date>' qualifier to each flagged sentence."
 
 Show one diff per page. The qualifier is appended inline: `<original sentence> (as of <updated date>)`. Do not rewrite the sentence - append only.
 
 **W4 - Stub pages**
+
 > "Found <N> stub pages not expanded in 30+ days. I can't expand them automatically - here's the list so you can decide which to ingest next."
 
 No diff shown - present the list of stub slugs with their age in days. Ask: **"Would you like to run wiki-ingest on any of these now?"** If yes, hand off to wiki-ingest for the selected slug.
 
 **naming, empty, stale_raw, tag_consistency** (imported from wikiform lint, no wiki-lint equivalent)
+
 > "Found <N> <check name> issues flagged by wikiform lint. These require manual attention - no auto-fix available."
 
 Present the list of findings. No diff shown. No confirmation required - these are informational.
 
 **I1 - Missing concept pages**
+
 > "Found <N> frequently referenced slugs with no dedicated page. I can create stub pages for each."
 
 For each slug, show the stub template from wiki-ingest step 7 Rule C, pre-filled with the slug and a placeholder definition. Confirm before writing each stub.
 
 **I2 - Coverage gaps**
+
 > "Found <N> open questions not addressed by any wiki page. Here are suggested search queries for each."
 
 No diff shown - present each question with a suggested search query extracted from its key terms. Ask: **"Would you like to run wiki-ingest on any of these now?"** If yes, hand off to wiki-ingest.
 
 **I3 - Missing cross-references**
+
 > "Found <N> page pairs that discuss the same entity but don't link to each other. I can add the missing links."
 
 Show one diff per page pair - two diffs per finding, one for each page. Confirm both together as a single unit since they are bidirectional.
@@ -515,8 +523,9 @@ Always append. Do not ask permission. New entries go at the top of the log, belo
 **Health:** <CLEAN | ERRORS | WARNINGS_ONLY>
 
 ### Findings
-| Check                | Severity  | Count | Source |
-| -------------------- | --------- | ----- | ------ |
+
+| Check                | Severity   | Count | Source |
+| -------------------- | ---------- | ----- | ------ |
 | broken_link          | 🔴 error   | N     | script |
 | missing_frontmatter  | 🔴 error   | N     | script |
 | broken_source        | 🔴 error   | N     | LLM    |
@@ -533,13 +542,16 @@ Always append. Do not ask permission. New entries go at the top of the log, belo
 | missing_cross_ref    | 🔵 info    | N     | script |
 
 ### Fixes applied
+
 <for each fix applied in step 4, one line:>
+
 - <check name> | [[<slug>]] | <one clause on what changed>
 
 <if no fixes were applied:>
 - none
 
 ### Fixes declined
+
 <for each fix offered but declined by the user:>
 - <check name> | [[<slug>]] | declined
 
@@ -547,13 +559,16 @@ Always append. Do not ask permission. New entries go at the top of the log, belo
 - none
 
 ### Requires manual review
+
 <for each finding flagged as "manual review required" in step 4:>
+
 - <check name> | <one clause on what needs attention>
 
 <if none:>
 - none
 
 ### Trend
+
 - Errors: <previous N> → <current N> (<+N / -N / unchanged>)
 - Warnings: <previous N> → <current N>
 - Info: <previous N> → <current N>

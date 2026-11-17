@@ -6,7 +6,7 @@ from wikiform.cmd.index import Article, IndexWriter, run_index
 
 
 def make_article(stem: str, title: str, tags: list[str], summary: str = "") -> Article:
-    return Article(stem=stem, title=title, tags=tags, updated="2024-01-01", kind="", summary=summary)
+    return Article(stem=stem, title=title, tags=tags, updated="2024-01-01", summary=summary)
 
 
 # ─── IndexWriter.write_category_index ────────────────────────────────────────
@@ -115,3 +115,20 @@ def test_run_index_counts_articles(vault: Path):
     write_page(vault, "b.md", "---\ntitle: B\ntags: []\nupdated: 2024-01-01\n---\n")
     result = run_index(vault)
     assert result.articles_scanned == 2
+
+
+# ─── regressions ──────────────────────────────────────────────────────────────
+
+def test_wikilink_alias_strips_pipe_and_brackets(tmp_path: Path):
+    from wikiform.cmd.index import _link
+
+    assert _link(make_article("p", "A|B [x]", [])) == "[[p|A-B x]]"
+
+
+def test_tag_index_lists_article_once_when_tags_differ_only_by_case(tmp_path: Path):
+    from wikiform.cmd.index import IndexWriter
+
+    writer = IndexWriter(vault_root=tmp_path, articles=[make_article("p", "P", ["ml", "ML"])], categories=[])
+    path, n_tags = writer.write_tag_index()
+    assert n_tags == 1
+    assert path.read_text(encoding="utf-8").count("[[p|P]]") == 1

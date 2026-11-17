@@ -1,16 +1,20 @@
 from __future__ import annotations
 
-import json
+import hashlib
 import re
-from dataclasses import asdict, dataclass
+import shutil
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import Path
 from urllib.parse import urlparse
 
 import click
+import frontmatter
 from loguru import logger
 
+from wikiform.utils.cli_helpers import emit_json, resolve_vault_root
 from wikiform.utils.extractor import extract_text, fetch_url
+from wikiform.utils.fs import normalize_rel
 
 logger = logger.bind(service="Wikiform - Extract")
 
@@ -54,11 +58,20 @@ _ROUTING: dict[str, tuple[str, str]] = {
 
 # Language tag for fenced code blocks
 _LANG: dict[str, str] = {
-    ".py": "python", ".js": "javascript", ".ts": "typescript",
-    ".sql": "sql", ".go": "go", ".rs": "rust",
-    ".rb": "ruby", ".java": "java", ".sh": "bash",
-    ".bat": "batch", ".ps1": "powershell", ".xml": "xml",
-    ".html": "html", ".c": "c", ".cpp": "cpp",
+    ".py": "python",
+    ".js": "javascript",
+    ".ts": "typescript",
+    ".sql": "sql",
+    ".go": "go",
+    ".rs": "rust",
+    ".rb": "ruby",
+    ".java": "java",
+    ".sh": "bash",
+    ".bat": "batch",
+    ".ps1": "powershell",
+    ".xml": "xml",
+    ".c": "c",
+    ".cpp": "cpp",
     ".h": "c",
 }
 
@@ -69,32 +82,40 @@ def _slugify(stem: str) -> str:
     return slug.strip("-")
 
 
+def _file_slug(stem: str) -> str:
+    """Slug for a local file stem; falls back to a short hash when nothing ASCII survives (e.g. '日本語')."""
+    return _slugify(stem) or f"file-{hashlib.sha1(stem.encode('utf-8')).hexdigest()[:8]}"  # nosec B324
+
+
 def _url_slug(url: str) -> str:
     parsed = urlparse(url)
     stem = Path(parsed.path.rstrip("/")).stem or parsed.netloc
-    return _slugify(stem) or _slugify(parsed.netloc)
+    return _slugify(stem) or _slugify(parsed.netloc) or _file_slug(url)
 
 
-def _build_markdown(title: str, source_type: str, content: str, lang: str | None, source_url: str | None = None) -> str:
-    today = date.today().isoformat()
-    url_line = f"source_url: {source_url}\n" if source_url else ""
-    frontmatter = (
-        f"---\n"
-        f"title: {title}\n"
-        f"source_type: {source_type}\n"
-        f"{url_line}"
-        f"status: raw\n"
-        f"slug: \"\"\n"
-        f"ingested_date: \"\"\n"
-        f"ingested_to: []\n"
-        f"added: {today}\n"
-        f"---\n"
-    )
+def _fence(content: str, lang: str) -> str:
+    """Wrap content in a code fence longer than any backtick run inside it."""
+    longest = max((len(m) for m in re.findall(r"`+", content)), default=0)
+    fence = "`" * max(3, longest + 1)
+    return f"{fence}{lang}\n{content}\n{fence}\n"
+
+
+def _build_markdown(title: str, source_type: str, content: str, lang: str | None, source_url: str | None = None, source_file: str | None = None) -> str:
+    meta: dict[str, object] = {"title": title, "source_type": source_type}
+    if source_url:
+        meta["source_url"] = source_url
+    if source_file:
+        meta["source_file"] = source_file  # vault-relative path of the preserved original
+    meta.update({"status": "raw", "slug": "", "ingested_date": "", "ingested_to": [], "added": date.today()})
+
+    # Serialised by PyYAML so titles/URLs containing ':', '#', quotes etc. stay valid YAML.
+    frontmatter_block = frontmatter.dumps(frontmatter.Post("", **meta), sort_keys=False).strip()
+
     if lang:
-        body = f"```{lang}\n{content}\n```\n"
+        body = _fence(content, lang)
     else:
         body = content if content.endswith("\n") else content + "\n"
-    return frontmatter + "\n" + body
+    return f"{frontmatter_block}\n\n{body}"
 
 
 @dataclass
@@ -104,6 +125,7 @@ class ExtractResult:
     source_type: str
     subdir: str
     generated_at: str
+    source_file: str | None = None  # vault-relative path of the preserved original (None for URLs and .md sources)
 
 
 def run_extract_url(url: str, vault_root: Path, overwrite: bool) -> ExtractResult:
@@ -142,18 +164,33 @@ def run_extract(source: Path, vault_root: Path, overwrite: bool) -> ExtractResul
     output_dir = vault_root / "raw" / subdir
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    slug = _slugify(source.stem)
+    slug = _file_slug(source.stem)
     output_path = output_dir / f"{slug}.md"
 
-    if output_path.exists() and not overwrite:
-        logger.error("Output already exists: {}. Use --overwrite to replace.", output_path)
-        raise SystemExit(1)
+    # Keep the original next to its markdown (same slug, original extension). A .md source needs no copy:
+    # the extracted file already contains its full text and would collide with the copy's name.
+    original_path = output_dir / f"{slug}{ext}" if ext and ext != ".md" else None
+
+    for target in (output_path, original_path):
+        if target is not None and target.exists() and not overwrite and target.resolve() != source.resolve():
+            logger.error("Output already exists: {}. Use --overwrite to replace.", target)
+            raise SystemExit(1)
 
     content = extract_text(source)
     lang = _LANG.get(ext) if source_type == "code" else None
-    markdown = _build_markdown(source.stem, source_type, content, lang)
 
-    output_path.write_text(markdown, encoding="utf-8")
+    copied = False
+    if original_path is not None and original_path.resolve() != source.resolve():  # source may already live at the destination
+        shutil.copy2(source, original_path)
+        copied = True
+    source_file = normalize_rel(original_path, vault_root) if original_path is not None else None
+
+    try:
+        output_path.write_text(_build_markdown(source.stem, source_type, content, lang, source_file=source_file), encoding="utf-8")
+    except OSError:
+        if copied and original_path is not None:
+            original_path.unlink(missing_ok=True)  # don't leave an orphaned copy without its markdown
+        raise
     logger.info("Extracted {} → {}", source.name, output_path)
 
     return ExtractResult(
@@ -162,6 +199,7 @@ def run_extract(source: Path, vault_root: Path, overwrite: bool) -> ExtractResul
         source_type=source_type,
         subdir=subdir,
         generated_at=now,
+        source_file=source_file,
     )
 
 
@@ -171,29 +209,21 @@ def run_extract(source: Path, vault_root: Path, overwrite: bool) -> ExtractResul
 @click.option("-o", "--output", type=click.Path(dir_okay=False, path_type=Path), default=None, help="Write JSON report to file instead of stdout.")
 @click.pass_context
 def extract_cmd(ctx: click.Context, source: str, overwrite: bool, output: Path | None) -> None:
-    vault_root = ctx.obj.get("vault_root")
-    if not vault_root:
-        logger.error("Vault root path not provided in context")
-        raise SystemExit(2)
+    root = resolve_vault_root(ctx)
 
-    root = Path(vault_root).resolve()
-    if not root.exists():
-        logger.error("Vault root does not exist: {}", root)
-        raise SystemExit(2)
+    try:
+        if source.startswith(("http://", "https://")):
+            result = run_extract_url(source, root, overwrite=overwrite)
+        else:
+            source_path = Path(source)
+            if not source_path.exists():
+                logger.error("File not found: {}", source)
+                raise SystemExit(2)
+            result = run_extract(source_path.resolve(), root, overwrite=overwrite)
+    except SystemExit:
+        raise
+    except Exception as err:  # extractors/requests raise many library-specific types
+        logger.error("Extraction failed for {}: {}", source, err)
+        raise SystemExit(1) from err
 
-    if source.startswith(("http://", "https://")):
-        result = run_extract_url(source, root, overwrite=overwrite)
-    else:
-        source_path = Path(source)
-        if not source_path.exists():
-            logger.error("File not found: {}", source)
-            raise SystemExit(2)
-        result = run_extract(source_path.resolve(), root, overwrite=overwrite)
-
-    rendered = json.dumps(asdict(result), indent=2, ensure_ascii=False)
-    if output:
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(rendered + "\n", encoding="utf-8")
-        logger.info("Wrote report to {}", output)
-    else:
-        click.echo(rendered)
+    emit_json(result, output, label="report")

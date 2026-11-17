@@ -4,10 +4,8 @@ from pathlib import Path
 
 from wikiform.utils.config import (
     DEFAULT_REQUIRED_FIELDS,
-    SchemaConfig,
     _parse_categories,
     _parse_required_fields,
-    load_schema,
     read_schema_categories,
     read_schema_required_fields,
 )
@@ -72,22 +70,6 @@ def test_parse_required_fields_empty_block():
     assert result == DEFAULT_REQUIRED_FIELDS
 
 
-# ─── load_schema ──────────────────────────────────────────────────────────────
-
-def test_load_schema_returns_schema_config(tmp_path: Path):
-    (tmp_path / "SCHEMA.md").write_text(SCHEMA_TEXT, encoding="utf-8")
-    result = load_schema(tmp_path)
-    assert isinstance(result, SchemaConfig)
-    assert "Engineering" in result.categories
-    assert "title" in result.required_fields
-
-
-def test_load_schema_missing_file_returns_defaults(tmp_path: Path):
-    result = load_schema(tmp_path)
-    assert result.categories == []
-    assert result.required_fields == DEFAULT_REQUIRED_FIELDS
-
-
 # ─── read_schema_categories / read_schema_required_fields ─────────────────────
 
 def test_read_schema_categories(tmp_path: Path):
@@ -108,3 +90,19 @@ def test_read_schema_required_fields(tmp_path: Path):
 
 def test_read_schema_required_fields_missing_file(tmp_path: Path):
     assert read_schema_required_fields(tmp_path) == DEFAULT_REQUIRED_FIELDS
+
+
+# ─── parsing edge cases ───────────────────────────────────────────────────────
+
+def test_parse_required_fields_ignores_nested_keys_and_handles_digits_and_hyphens():
+    text = "## Wiki Page Frontmatter\n```yaml\ntitle: x\nsource-url: y\nv2: z\nrelated:\n  nested_key: 1\n```\n"
+    assert _parse_required_fields(text) == frozenset({"title", "source-url", "v2", "related"})
+
+
+def test_parse_categories_keeps_dashes_inside_names():
+    assert _parse_categories("## Index Categories\n- Machine-Learning\n- --odd\nPlain\n") == ["Machine-Learning", "--odd", "Plain"]
+
+
+def test_read_schema_handles_crlf(tmp_path: Path):
+    (tmp_path / "SCHEMA.md").write_bytes(b"## Index Categories\r\n- A\r\n- B\r\n\r\n## Other\r\nx\r\n")
+    assert read_schema_categories(tmp_path) == ["A", "B"]

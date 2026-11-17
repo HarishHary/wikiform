@@ -9,23 +9,34 @@ from loguru import logger
 
 logger = logger.bind(service="Wikiform - FS")
 
-SKIP_DIRS: frozenset[str] = frozenset({
-    ".obsidian",
-    ".git",
-    ".trash",
-    "node_modules",
-    "outputs",
-})
+SKIP_DIRS: frozenset[str] = frozenset(
+    {
+        ".obsidian",
+        ".git",
+        ".trash",
+        "node_modules",
+        "outputs",
+    }
+)
 
-SKIP_FILES: frozenset[str] = frozenset({
-    "README.md",
-    "LICENSE.md",
-    "SCHEMA.md",
-})
+SKIP_FILES: frozenset[str] = frozenset(
+    {
+        "README.md",
+        "LICENSE.md",
+        "SCHEMA.md",
+    }
+)
 
 # Prefixes that indicate a line is structural markup, not prose.
 SUMMARY_SKIP_PREFIXES: tuple[str, ...] = (
-    "#", "---", ">", "|", "[[", "-", "*", "!",
+    "#",
+    "---",
+    ">",
+    "|",
+    "[[",
+    "-",
+    "*",
+    "!",
 )
 
 
@@ -55,9 +66,7 @@ def normalize_tags(value: object, source: str = "") -> list[str]:
                 if t.strip():
                     result.append(t.strip())
             else:
-                logger.warning(
-                    "Non-string tag {} in {}, skipping", repr(t), source or "unknown"
-                )
+                logger.warning("Non-string tag {} in {}, skipping", repr(t), source or "unknown")
         return result
     logger.warning(
         "Unexpected tags type {} in {}: {}, skipping",
@@ -135,8 +144,7 @@ def collect_vault_files(vault_root: Path) -> list[Path]:
     raw_dir = vault_root / "raw"
     if raw_dir.exists():
         for f in sorted(raw_dir.rglob("*.md")):
-            rel = f.relative_to(vault_root)
-            if not any(p in SKIP_DIRS for p in rel.parts) and f.name not in SKIP_FILES:
+            if not should_skip(f, vault_root) and f.name not in SKIP_FILES:
                 _add(f)
 
     wiki_dir = vault_root / "wiki"
@@ -148,20 +156,6 @@ def collect_vault_files(vault_root: Path) -> list[Path]:
     return results
 
 
-def collect_md_files(vault_root: Path) -> list[Path]:
-    """
-    Return all .md files in the vault for search indexing.
-    Uses rglob but skips SKIP_DIRS and SKIP_FILES.
-    """
-    results: list[Path] = []
-    for f in sorted(vault_root.rglob("*.md")):
-        if not should_skip(f, vault_root) and f.name not in SKIP_FILES:
-            results.append(f)
-    return results
-
-
 def extract_wikilinks(content: str) -> list[str]:
     """Extract [[target]] and [[target|alias]] wikilink targets, skipping ![[embed]] syntax."""
-    return re.findall(
-        r"(?<!!)\[\[([^\]|#]+)(?:#[^\]|]+)?(?:\|[^\]]+)?\]\]", content
-    )
+    return re.findall(r"(?<!!)\[\[([^\]|#]+)(?:#[^\]|]+)?(?:\|[^\]]+)?\]\]", content)

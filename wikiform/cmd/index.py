@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-import json
+import re
 from collections import defaultdict
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
 import click
 from loguru import logger
 
+from wikiform.utils.cli_helpers import emit_json, resolve_vault_root
 from wikiform.utils.config import read_schema_categories
 from wikiform.utils.fs import (
     collect_pages,
@@ -26,7 +27,6 @@ class Article:
     title: str
     tags: list[str]
     updated: str
-    kind: str
     summary: str
 
 
@@ -47,25 +47,58 @@ def _today_str() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%d")
 
 
+def _link(article: Article) -> str:
+    """Wikilink with the title as alias; '|' and brackets in a title would break the link syntax."""
+    alias = re.sub(r"[\[\]]", "", article.title).replace("|", "-")
+    return f"[[{article.stem}|{alias}]]"
+
+
+def _header(title: str, description: str, heading: str, summary: str) -> list[str]:
+    return [
+        "---",
+        f'title: "{title}"',
+        f'updated: "{_today_str()}"',
+        "auto_generated: true",
+        f"description: {description}",
+        "---",
+        "",
+        f"# {heading}",
+        "",
+        "> Auto-generated. Do not edit manually - changes will be overwritten by vault index.",
+        "",
+        summary,
+        "",
+    ]
+
+
+def _write(path: Path, lines: list[str], label: str) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines), encoding="utf-8")
+    logger.info("Wrote {} to {}", label, path)
+    return path
+
+
 def _collect_articles(pages_dir: Path) -> list[Article]:
     articles: list[Article] = []
     for md_file in collect_pages(pages_dir):
         attrs, body = load_frontmatter(md_file)
         title = str(attrs.get("title") or md_file.stem).strip() or md_file.stem
         tags = normalize_tags(attrs.get("tags"), source=md_file.name)
-        articles.append(Article(
-            stem=md_file.stem,
-            title=title,
-            tags=tags,
-            updated=str(attrs.get("updated", "") or ""),
-            kind=str(attrs.get("type", "") or ""),
-            summary=str(attrs.get("summary", "") or extract_summary(body)).strip(),
-        ))
+        articles.append(
+            Article(
+                stem=md_file.stem,
+                title=title,
+                tags=tags,
+                updated=str(attrs.get("updated", "") or ""),
+                summary=str(attrs.get("summary", "") or extract_summary(body)).strip(),
+            )
+        )
     logger.info("Collected {} articles from {}", len(articles), pages_dir)
     return articles
 
 
 # ─── IndexWriter ──────────────────────────────────────────────────────────────
+
 
 @dataclass
 class IndexWriter:
@@ -93,21 +126,12 @@ class IndexWriter:
 
         total_categories = sum(1 for c in ordered if c in by_category)
 
-        lines = [
-            "---",
-            'title: "Wiki Index"',
-            f'updated: "{_today_str()}"',
-            "auto_generated: true",
-            "description: Primary content catalog. Every wiki page listed once, by category. Maintained by wiki-ingest.",
-            "---",
-            "",
-            "# Wiki Index",
-            "",
-            "> Auto-generated. Do not edit manually - changes will be overwritten by vault index.",
-            "",
+        lines = _header(
+            "Wiki Index",
+            "Primary content catalog. Every wiki page listed once, by category. Maintained by wiki-ingest.",
+            "Wiki Index",
             f"*{len(self.articles)} pages across {total_categories} categories*",
-            "",
-        ]
+        )
 
         for category in ordered:
             items = by_category.get(category, [])
@@ -115,92 +139,63 @@ class IndexWriter:
             if items:
                 for article in items:
                     desc = f" - {article.summary}" if article.summary else ""
-                    lines.append(f"- [[{article.stem}|{article.title}]]{desc}")
+                    lines.append(f"- {_link(article)}{desc}")
             else:
                 lines.append("<!-- no pages in this category yet -->")
             lines.append("")
 
-        out = self.vault_root / "wiki" / "index.md"
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text("\n".join(lines), encoding="utf-8")
-        logger.info("Wrote category index to {}", out)
-        return out, total_categories
+        return _write(self.vault_root / "wiki" / "index.md", lines, "category index"), total_categories
 
     def write_master_index(self) -> Path:
         by_letter: dict[str, list[Article]] = defaultdict(list)
         for article in sorted(self.articles, key=lambda x: x.title.lower()):
             title = article.title.strip() or article.stem
-            letter = title[0].upper() if title else "#"
+            letter = title[0].upper()
             if not letter.isalpha():
                 letter = "#"
             by_letter[letter].append(article)
 
-        lines = [
-            "---",
-            'title: "Master Index"',
-            f'updated: "{_today_str()}"',
-            "auto_generated: true",
-            "description: Every wiki page indexed by title letter, alphabetically. Maintained by vault index.",
-            "---",
-            "",
-            "# Master Index",
-            "",
-            "> Auto-generated. Do not edit manually - changes will be overwritten by vault index.",
-            "",
+        lines = _header(
+            "Master Index",
+            "Every wiki page indexed by title letter, alphabetically. Maintained by vault index.",
+            "Master Index",
             f"*{len(self.articles)} pages*",
-            "",
-        ]
+        )
 
         for letter in sorted(by_letter.keys()):
             lines.append(f"## {letter}")
             for article in by_letter[letter]:
                 desc = f" - {article.summary}" if article.summary else ""
-                lines.append(f"- [[{article.stem}|{article.title}]]{desc}")
+                lines.append(f"- {_link(article)}{desc}")
             lines.append("")
 
-        out = self.vault_root / "wiki" / "master-index.md"
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text("\n".join(lines), encoding="utf-8")
-        logger.info("Wrote master index to {}", out)
-        return out
+        return _write(self.vault_root / "wiki" / "master-index.md", lines, "master index")
 
     def write_tag_index(self) -> tuple[Path, int]:
         by_tag: dict[str, list[Article]] = defaultdict(list)
         for article in self.articles:
-            for tag in article.tags:
-                by_tag[tag.lower()].append(article)
+            for tag in {t.lower() for t in article.tags}:  # an article tagged ["ml", "ML"] is listed once
+                by_tag[tag].append(article)
 
-        lines = [
-            "---",
-            'title: "Tag Index"',
-            f'updated: "{_today_str()}"',
-            "auto_generated: true",
-            "description: Every wiki page indexed by tag, alphabetically. Maintained by vault index.",
-            "---",
-            "",
-            "# Tag Index",
-            "",
-            "> Auto-generated. Do not edit manually - changes will be overwritten by vault index.",
-            "",
+        lines = _header(
+            "Tag Index",
+            "Every wiki page indexed by tag, alphabetically. Maintained by vault index.",
+            "Tag Index",
             f"*{len(by_tag)} tags across {len(self.articles)} pages*",
-            "",
-        ]
+        )
 
         for tag in sorted(by_tag.keys()):
             items = sorted(by_tag[tag], key=lambda x: x.title.lower())
             lines.append(f"## {tag} ({len(items)})")
             for article in items:
-                lines.append(f"- [[{article.stem}|{article.title}]]")
+                lines.append(f"- {_link(article)}")
             lines.append("")
 
-        out = self.vault_root / "wiki" / "tag-index.md"
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text("\n".join(lines), encoding="utf-8")
-        logger.info("Wrote tag index to {}", out)
-        return out, len(by_tag)
+        return _write(self.vault_root / "wiki" / "tag-index.md", lines, "tag index"), len(by_tag)
 
 
 # ─── Public API ───────────────────────────────────────────────────────────────
+
 
 def run_index(vault_root: Path) -> IndexResult:
     pages_dir = vault_root / "wiki" / "pages"
@@ -227,19 +222,12 @@ def run_index(vault_root: Path) -> IndexResult:
 
 # ─── CLI command ─────────────────────────────────────────────────────────────
 
+
 @click.command("index", help="Regenerate wiki/index.md, wiki/master-index.md, and wiki/tag-index.md.")
 @click.option("-o", "--output", type=click.Path(dir_okay=False, path_type=Path), default=None, help="Write JSON report to file instead of stdout")
 @click.pass_context
 def index_cmd(ctx: click.Context, output: Path | None) -> None:
-    vault_root = ctx.obj.get("vault_root")
-    if not vault_root:
-        logger.error("Vault root path not provided in context")
-        raise SystemExit(2)
-
-    root = Path(vault_root).resolve()
-    if not root.exists():
-        logger.error("Vault root does not exist: {}", root)
-        raise SystemExit(2)
+    root = resolve_vault_root(ctx)
 
     if not (root / "SCHEMA.md").exists():
         logger.warning(
@@ -248,11 +236,4 @@ def index_cmd(ctx: click.Context, output: Path | None) -> None:
         )
 
     result = run_index(root)
-    rendered = json.dumps(asdict(result), indent=2, ensure_ascii=False)
-
-    if output:
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(rendered + "\n", encoding="utf-8")
-        logger.info("Wrote result to {}", output)
-    else:
-        click.echo(rendered)
+    emit_json(result, output)

@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import contextlib
-import json
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
 import click
 from loguru import logger
 
+from wikiform.utils.cli_helpers import emit_json, resolve_vault_root
 from wikiform.utils.db import get_connection, init_db
 from wikiform.utils.fs import collect_pages, load_frontmatter, normalize_rel, normalize_tags
 
@@ -69,9 +69,7 @@ def run_fts_index(vault_root: Path, incremental: bool) -> FtsIndexResult:
                 continue
 
             if incremental:
-                row = db.execute(
-                    "SELECT mtime FROM articles WHERE path = ?", (rel_path,)
-                ).fetchone()
+                row = db.execute("SELECT mtime FROM articles WHERE path = ?", (rel_path,)).fetchone()
                 if row and row["mtime"] >= mtime:
                     skipped += 1
                     continue
@@ -87,8 +85,7 @@ def run_fts_index(vault_root: Path, incremental: bool) -> FtsIndexResult:
                        content      = excluded.content,
                        mtime        = excluded.mtime,
                        last_indexed = excluded.last_indexed""",
-                (rel_path, parsed.title, parsed.tags, parsed.updated,
-                 parsed.content, mtime, now),
+                (rel_path, parsed.title, parsed.tags, parsed.updated, parsed.content, mtime, now),
             )
             logger.debug("Indexed: {}", rel_path)
             indexed += 1
@@ -112,31 +109,23 @@ def run_fts_index(vault_root: Path, incremental: bool) -> FtsIndexResult:
     )
 
 
-@click.command("fts-index", help="Build or update the FTS5 search index. By default, all markdown files will be re-indexed. Use --incremental to only index new or modified files since the last run.")
+@click.command(
+    "fts-index",
+    help="Build or update the FTS5 search index. By default, all markdown files will be re-indexed. Use --incremental to only index new or modified files since the last run.",
+)
 @click.option("--incremental", is_flag=True, help="Only index new or modified files")
 @click.option("-o", "--output", type=click.Path(dir_okay=False, path_type=Path), default=None, help="Write JSON report to file instead of stdout")
 @click.pass_context
 def fts_index_cmd(ctx: click.Context, incremental: bool, output: Path | None) -> None:
-    vault_root = ctx.obj.get("vault_root")
-    if not vault_root:
-        logger.error("Vault root path not provided in context")
-        raise SystemExit(2)
-
-    root = Path(vault_root).resolve()
-    if not root.exists():
-        logger.error("Vault root does not exist: {}", root)
-        raise SystemExit(2)
+    root = resolve_vault_root(ctx)
 
     result = run_fts_index(root, incremental)
     logger.info(
         "Indexed: {}  Skipped: {}  Removed: {}  Total: {}",
-        result.indexed, result.skipped, result.deleted, result.total,
+        result.indexed,
+        result.skipped,
+        result.deleted,
+        result.total,
     )
 
-    rendered = json.dumps(asdict(result), indent=2, ensure_ascii=False)
-    if output:
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(rendered + "\n", encoding="utf-8")
-        logger.info("Wrote result to {}", output)
-    else:
-        click.echo(rendered)
+    emit_json(result, output)

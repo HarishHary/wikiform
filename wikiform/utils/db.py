@@ -72,17 +72,17 @@ def sanitize_fts_query(query: str) -> str:
       treats them as phrase tokens: multi-head → "multi-head"
     - Collapse whitespace
 
-    AND, OR, NOT are preserved — users may use them intentionally.
+    AND, OR, NOT are preserved - users may use them intentionally.
     """
     # Strip special chars except double-quote
-    sanitized = re.sub(r'[\^*()\[\]{}+]', " ", query)
+    sanitized = re.sub(r"[\^*()\[\]{}+]", " ", query)
 
     # Quote hyphenated tokens only outside existing quoted phrases
     parts = re.split(r'("(?:[^"\\]|\\.)*")', sanitized)
     result = []
     for i, part in enumerate(parts):
         if i % 2 == 1:
-            # Inside an existing quoted phrase — keep as-is
+            # Inside an existing quoted phrase - keep as-is
             result.append(part)
         else:
             result.append(re.sub(r"(\b\w+(?:-\w+)+\b)", r'"\1"', part))
