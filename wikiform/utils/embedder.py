@@ -22,7 +22,7 @@ class Embedder:
 
     @property
     def dimension(self) -> int:
-        return int(self._model.get_sentence_embedding_dimension())
+        return int(self._model.get_embedding_dimension())
 
     def embed(self, text: str) -> list[float]:
         return self._model.encode(text, convert_to_numpy=True).tolist()
