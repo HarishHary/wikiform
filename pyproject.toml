@@ -1,10 +1,11 @@
 [project]
 name = "wikiform"
 version = "1.0.0"
-dynamic = ["dependencies"]
-description = "LLM-powered wiki management CLI"
+description = "Wiki vault maintenance CLI - index, lint, and search your wiki."
+readme = "README.md"
+license = "MIT"
 requires-python = ">=3.14"
-authors = [{ name = "Harish SEGAR <segharish@gmail.com>" }]
+authors = [{ name = "Harish SEGAR", email = "segharish@gmail.com" }]
 keywords = [
     "wiki",
     "knowledge management",
@@ -14,6 +15,32 @@ keywords = [
     "FTS5",
 ]
 classifiers = ["Programming Language :: Python :: 3.14"]
+dependencies = [
+    "click>=8.1,<9",
+    "python-frontmatter>=1.1,<2",
+    "loguru>=0.7,<0.8",
+    "rich>=13.0,<14",
+    "markitdown[pdf,docx,xlsx,xls,pptx]>=0.1.5,<0.2",
+    "opendataloader-pdf>=2.2.1,<3",
+    "sqlite-vec>=0.1.9,<0.2",
+    "sentence-transformers>=5.4.1,<6",
+    "requests>=2.33.1,<3",
+    "trafilatura>=2.0.0,<3",
+]
+
+[dependency-groups]
+dev = [
+    "bandit>=1.9.3,<2",
+    "black>=26.1.0,<27",
+    "flake8>=7.3.0,<8",
+    "pre-commit>=4.5.1,<5",
+    "pytest>=9.0.2,<10",
+    "pytest-cov==7.0.0",
+    "ruff>=0.14.13,<0.15",
+    "wheel>=0.46.0,<0.47",
+    "yamllint>=1.38.0,<2",
+    "twine>=6.2.0,<7",
+]
 
 [project.urls]
 homepage = "https://github.com/wikiform/wikiform"
@@ -75,61 +102,12 @@ line-ending = "lf"
 docstring-code-format = true
 skip-magic-trailing-comma = false
 
-[tool.poetry]
-name = "wikiform"
-version = "1.0.0"
-description = "Wiki vault maintenance CLI - index, lint, and search your wiki."
-authors = ["Harish SEGAR <segharish@gmail.com>"]
-license = "MIT"
-readme = "README.md"
-homepage = "https://github.com/wikiform/wikiform"
-repository = "https://github.com/wikiform/wikiform"
-documentation = "https://github.com/wikiform/wikiform"
-keywords = [
-    "wiki",
-    "knowledge management",
-    "LLM",
-    "obsidian",
-    "markdown",
-    "FTS5",
-]
-packages = [{ include = "wikiform" }]
-exclude = ["wikiform/tests/*"]
-
 [build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0", "setuptools"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[tool.poetry.dependencies]
-python = "^3.14"
-click = "^8.1"
-python-frontmatter = "^1.1"
-loguru = "^0.7"
-rich = "^13.0"
-markitdown = { version = "^0.1.5", extras = [
-    "pdf",
-    "docx",
-    "xlsx",
-    "xls",
-    "pptx",
-] }
-opendataloader-pdf = "^2.2.1"
-sqlite-vec = "^0.1.9"
-sentence-transformers = "^5.4.1"
-requests = "^2.33.1"
-trafilatura = "^2.0.0"
+[tool.hatch.build.targets.wheel]
+packages = ["wikiform"]
 
-[tool.poetry.group.dev.dependencies]
-bandit = "^1.9.3"
-black = "^26.1.0"
-flake8 = "^7.3.0"
-pre-commit = "^4.5.1"
-pytest = "^9.0.2"
-pytest-cov = "7.0.0"
-ruff = "^0.14.13"
-wheel = "^0.46.0"
-yamllint = "^1.38.0"
-twine = "^6.2.0"
-
-[tool.poetry.scripts]
-wikiform = "wikiform.cli:cli"
+[tool.hatch.build.targets.sdist]
+include = ["wikiform", "README.md", "pyproject.toml"]

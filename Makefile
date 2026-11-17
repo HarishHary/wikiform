@@ -2,44 +2,48 @@
 
 .DEFAULT: help
 
-## Install requirements
-init:
-	poetry install --without dev --no-root --no-interaction --no-ansi
+# Pin the interpreter for every uv call so a stale/unparsable .python-version
+# (e.g. a pyenv virtualenv name) cannot break `make` targets. Override with UV_PYTHON=...
+export UV_PYTHON ?= 3.14
 
-## Install requirements-dev
+## Install runtime requirements only
+init:
+	uv sync --no-dev
+
+## Install runtime + dev requirements
 init-dev:
-	poetry install --only dev --no-root --no-interaction --no-ansi
+	uv sync
 
 ## Check python lint with flake8
 lint:
-	flake8 --config .flake8 wikiform/
-	flake8 --config .flake8 tests/
+	uv run flake8 --config .flake8 wikiform/
+	uv run flake8 --config .flake8 tests/
 
 ## Check python code with bandit
 bandit:
-	bandit -r wikiform/ -c pyproject.toml
-	bandit -r tests/ -c pyproject.toml
+	uv run bandit -r wikiform/ -c pyproject.toml
+	uv run bandit -r tests/ -c pyproject.toml
 
 ## Check python code with black
 black:
-	black wikiform/ --config pyproject.toml --diff --color
-	black tests/ --config pyproject.toml --diff --color
+	uv run black wikiform/ --config pyproject.toml --diff --color
+	uv run black tests/ --config pyproject.toml --diff --color
 
-## Create dist package (poetry)
+## Create dist package (uv build)
 build: clean
-	poetry build
+	uv build
 
-## Install wheel package
+## Install wheel package as a uv tool
 install: clean build
-	pip3 install dist/*.whl
+	uv tool install --force dist/*.whl
 
 ## Uninstall wikiform
 uninstall:
-	pip3 uninstall -y wikiform
+	uv tool uninstall wikiform
 
 ## Python unit tests
 tests:
-	pytest tests -v -l -p no:warnings --disable-warnings
+	uv run pytest tests -v -l -p no:warnings --disable-warnings
 
 ## Deep clean
 clean: clean-build clean-pyc

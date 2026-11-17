@@ -5,9 +5,12 @@ LLM-backed wiki management CLI. Extract sources, index, lint, and search an Obsi
 ## Installation
 
 ```bash
-poetry install                 # all core deps (includes search, embeddings, extraction)
-poetry install --only dev      # dev tools only (lint, test, etc.)
+uv sync                        # core deps + dev tools (includes search, embeddings, extraction)
+uv sync --no-dev               # core deps only
+uv tool install .              # or: install the `wikiform` CLI globally
 ```
+
+Requires [uv](https://docs.astral.sh/uv/) and Python 3.14+.
 
 > **PDF extraction** uses `opendataloader-pdf` and requires a Java runtime. If Java is not installed, extraction falls back to `markitdown` automatically.
 

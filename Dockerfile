@@ -7,11 +7,10 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml poetry.lock* /app/
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir poetry && \
-    poetry config virtualenvs.create false && \
-    poetry install --without dev --no-root --no-interaction --no-ansi
+COPY --from=ghcr.io/astral-sh/uv:0.13 /uv /usr/local/bin/uv
+COPY pyproject.toml uv.lock /app/
+RUN uv export --frozen --no-dev --no-emit-project --no-hashes -o /tmp/requirements.txt && \
+    uv pip install --system --no-cache -r /tmp/requirements.txt
 
 # Pre-download embedding model into a fixed cache location
 ENV HF_HOME=/hf-cache
@@ -30,8 +29,11 @@ RUN apt-get update && \
 
 RUN addgroup --system wikiform && adduser --system --ingroup wikiform wikiform
 
-# Copy installed Python packages from builder
+# Copy installed Python packages (and uv) from builder
 COPY --from=builder /usr/local /usr/local
+
+# Put `uv tool install` executables on PATH (used by `make install` in the dev container)
+ENV UV_TOOL_BIN_DIR=/usr/local/bin
 
 # Copy pre-downloaded HuggingFace model cache
 COPY --from=builder /hf-cache /hf-cache
