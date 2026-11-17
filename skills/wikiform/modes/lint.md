@@ -50,16 +50,16 @@ Read the JSON output from `/tmp/vault-lint-result.json`. Extract and store:
 
 **Normalise check names** using this mapping before storing:
 
-| wikiform lint name | Normalised name       | Notes                                |
-| ------------------ | --------------------- | ------------------------------------ |
-| `broken_link`      | `broken_link`         | E1                                   |
-| `frontmatter`      | `missing_frontmatter` | E2                                   |
-| `orphan`           | `orphan`              | W1                                   |
-| `missing_cross_ref` | `missing_cross_ref`  | I3                                   |
-| `naming`           | `naming`              | no wiki-lint equivalent - keep as-is |
-| `empty`            | `empty`               | no wiki-lint equivalent - keep as-is |
-| `stale_raw`        | `stale_raw`           | no wiki-lint equivalent - keep as-is |
-| `tag_consistency`  | `tag_consistency`     | no wiki-lint equivalent - keep as-is |
+| wikiform lint name  | Normalised name       | Notes                                |
+| ------------------- | --------------------- | ------------------------------------ |
+| `broken_link`       | `broken_link`         | E1                                   |
+| `frontmatter`       | `missing_frontmatter` | E2                                   |
+| `orphan`            | `orphan`              | W1                                   |
+| `missing_cross_ref` | `missing_cross_ref`   | I3                                   |
+| `naming`            | `naming`              | no wiki-lint equivalent - keep as-is |
+| `empty`             | `empty`               | no wiki-lint equivalent - keep as-is |
+| `stale_raw`         | `stale_raw`           | no wiki-lint equivalent - keep as-is |
+| `tag_consistency`   | `tag_consistency`     | no wiki-lint equivalent - keep as-is |
 
 Store all imported findings in the findings list. These are treated identically to findings produced by step 2's semantic checks - they flow into step 3's report and step 4's fix offers without distinction.
 

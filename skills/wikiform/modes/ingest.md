@@ -25,17 +25,17 @@ Store as `INGESTS_SINCE_LINT`. This value is computed once per session and reuse
 
 Identify the source type and route it to the correct `raw/` subdirectory. Do not proceed to step 2 until the file is saved.
 
-| Source type                                           | How to read                                                                    | Save to                        |
-| ----------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------ |
-| File path - document (`.pdf`, `.md`, `.txt`, `.docx`, `.pptx`) | `wikiform extract` (see below)                                        | `raw/papers/<slug>.md`         |
-| File path - data (`.csv`, `.json`, `.yaml`, `.toml`, `.xlsx`)  | `wikiform extract`                                                    | `raw/datasets/<slug>.md`       |
-| File path - image (`.png`, `.jpg`, `.svg`)            | `wikiform extract` copies the image and writes a markdown stub with the frontmatter; then view the image itself at `source_file` (the stub text has only size metadata) | `raw/images/<slug>.<ext>` + `<slug>.md` |
-| File path - code (`.py`, `.go`, `.ts`, etc.)          | `wikiform extract`                                                             | `raw/code/<slug>.md`           |
-| URL                                                   | `wikiform extract <URL>`. If it fails or returns empty content (paywall, JS-rendered page), fall back to the `browse` skill; if that is unavailable, tell the user and stop. | `raw/articles/<slug>.md`       |
-| Pasted text                                           | Format as markdown                                                             | `raw/papers/<slug>.md`         |
-| Code snippet                                          | Format as markdown with fenced code block and language tag                     | `raw/code/<slug>.md`           |
-| Repository                                            | Clone or copy                                                                  | `raw/repos/<slug>/`            |
-| Other                                                 | Ask the user: what is this and how should it be accessed? Do not guess.        | Determined after clarification |
+| Source type                                                    | How to read                                                                                                                                                                  | Save to                                 |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| File path - document (`.pdf`, `.md`, `.txt`, `.docx`, `.pptx`) | `wikiform extract` (see below)                                                                                                                                               | `raw/papers/<slug>.md`                  |
+| File path - data (`.csv`, `.json`, `.yaml`, `.toml`, `.xlsx`)  | `wikiform extract`                                                                                                                                                           | `raw/datasets/<slug>.md`                |
+| File path - image (`.png`, `.jpg`, `.svg`)                     | `wikiform extract` copies the image and writes a markdown stub with the frontmatter; then view the image itself at `source_file` (the stub text has only size metadata)      | `raw/images/<slug>.<ext>` + `<slug>.md` |
+| File path - code (`.py`, `.go`, `.ts`, etc.)                   | `wikiform extract`                                                                                                                                                           | `raw/code/<slug>.md`                    |
+| URL                                                            | `wikiform extract <URL>`. If it fails or returns empty content (paywall, JS-rendered page), fall back to the `browse` skill; if that is unavailable, tell the user and stop. | `raw/articles/<slug>.md`                |
+| Pasted text                                                    | Format as markdown                                                                                                                                                           | `raw/papers/<slug>.md`                  |
+| Code snippet                                                   | Format as markdown with fenced code block and language tag                                                                                                                   | `raw/code/<slug>.md`                    |
+| Repository                                                     | Clone or copy                                                                                                                                                                | `raw/repos/<slug>/`                     |
+| Other                                                          | Ask the user: what is this and how should it be accessed? Do not guess.                                                                                                      | Determined after clarification          |
 
 **Using `wikiform extract`:** run
 
@@ -114,16 +114,16 @@ added: <today>
 
 **Field rules:**
 
-| Field           | Rule                                                                                    |
-| --------------- | --------------------------------------------------------------------------------------- |
-| `title`         | Use the source's own title if present. If not, use the filename. Do not invent a title. |
-| `source_type`   | Must match the routing decision made in step 1.                                         |
+| Field           | Rule                                                                                                                                              |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `title`         | Use the source's own title if present. If not, use the filename. Do not invent a title.                                                           |
+| `source_type`   | Must match the routing decision made in step 1.                                                                                                   |
 | `source_file`   | Set by `wikiform extract` (vault-relative path of the preserved original). Never edit or invent it; omit for pasted text, URLs and `.md` sources. |
-| `status`        | Always `raw` at this point. Only two valid values: `raw` and `ingested`.                |
-| `slug`          | Leave blank now. Step 5 will generate it. Write it back here after step 5 completes.    |
-| `ingested_date` | Leave blank now. Step 12 will fill it.                                                  |
-| `ingested_to`   | Empty list. Step 12 will populate it.                                                   |
-| `added`         | Today's date. This never changes after being set.                                       |
+| `status`        | Always `raw` at this point. Only two valid values: `raw` and `ingested`.                                                                          |
+| `slug`          | Leave blank now. Step 5 will generate it. Write it back here after step 5 completes.                                                              |
+| `ingested_date` | Leave blank now. Step 12 will fill it.                                                                                                            |
+| `ingested_to`   | Empty list. Step 12 will populate it.                                                                                                             |
+| `added`         | Today's date. This never changes after being set.                                                                                                 |
 
 **If the raw file is a binary that was not processed by `wikiform extract`** and so has no markdown companion: create a sidecar file at `<same path>/<filename>.meta.yaml` with the same fields.
 
@@ -334,11 +334,11 @@ Deferred: <list of warnings/suggestions deferred to future pass>
 
 The wiki maintains three index files. All three must reflect every page created or updated in steps 6 and 7 before proceeding to step 10.
 
-| Index file             | Purpose                                    | Updated by       |
-| ---------------------- | ------------------------------------------ | ---------------- |
-| `wiki/index.md`        | Every page, one-line summary, by category  | Script           |
-| `wiki/tag-index.md`    | Every page, by tag alphabetically          | Script           |
-| `wiki/master-index.md` | Every page, by title letter alphabetically | Script           |
+| Index file             | Purpose                                    | Updated by |
+| ---------------------- | ------------------------------------------ | ---------- |
+| `wiki/index.md`        | Every page, one-line summary, by category  | Script     |
+| `wiki/tag-index.md`    | Every page, by tag alphabetically          | Script     |
+| `wiki/master-index.md` | Every page, by title letter alphabetically | Script     |
 
 **Run the index script:**
 
@@ -376,7 +376,7 @@ The search index enables full-text lookup across all wiki pages. It must be upda
 | Mode            | When to use                                                                                                                                   |
 | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | `--incremental` | Normal ingestion. Re-indexes only new or modified pages (by file mtime) and removes entries for deleted or renamed pages. Pass it explicitly. |
-| *(no flag)*     | Full reindex of every page. Use when the incremental index produces incorrect results.                                                        |
+| _(no flag)_     | Full reindex of every page. Use when the incremental index produces incorrect results.                                                        |
 
 **Run the search index script:**
 

@@ -35,14 +35,14 @@ wikiform --vault-root "<WIKI_ROOT>" <command> [options]
 
 Commands used by the modes:
 
-| Command                                         | Purpose                                                                                                   |
-| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `extract <path-or-URL> [--overwrite]`           | Convert a file/URL to `raw/<subdir>/<slug>.md` with raw-file frontmatter. Prints a JSON result.           |
-| `index`                                         | Regenerate `wiki/index.md`, `wiki/master-index.md`, `wiki/tag-index.md`.                                  |
-| `lint [--check <name>] [-o file]`               | Structural checks. JSON report on stdout or in the `-o` file.                                             |
-| `search index [--incremental]`                  | Build the FTS5 index. Without `--incremental` every page is re-indexed.                                   |
-| `search embed [--incremental] [--reset]`        | Build vector embeddings (needed only for `search query --semantic`).                                      |
-| `search query "<terms>" [--semantic] [--tag T] [--dir D] [--limit N] --json` | Keyword (default) or semantic search. `--tag` is an exact tag; `--dir` a path prefix. |
+| Command                                                                      | Purpose                                                                                         |
+| ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `extract <path-or-URL> [--overwrite]`                                        | Convert a file/URL to `raw/<subdir>/<slug>.md` with raw-file frontmatter. Prints a JSON result. |
+| `index`                                                                      | Regenerate `wiki/index.md`, `wiki/master-index.md`, `wiki/tag-index.md`.                        |
+| `lint [--check <name>] [-o file]`                                            | Structural checks. JSON report on stdout or in the `-o` file.                                   |
+| `search index [--incremental]`                                               | Build the FTS5 index. Without `--incremental` every page is re-indexed.                         |
+| `search embed [--incremental] [--reset]`                                     | Build vector embeddings (needed only for `search query --semantic`).                            |
+| `search query "<terms>" [--semantic] [--tag T] [--dir D] [--limit N] --json` | Keyword (default) or semantic search. `--tag` is an exact tag; `--dir` a path prefix.           |
 
 Conventions:
 
@@ -60,14 +60,14 @@ Once `SCHEMA.md` is located, read it and extract:
 - `Cross-References` - wikilink convention (`[[slug]]`)
 - `Log Entry Format` - format for appending entries to `wiki/log.md`
 
-`wikiform` itself parses `## Index Categories` (a bullet or one-per-line list) and the first ```` ```yaml ```` block under `## Wiki Page Frontmatter` (top-level keys, minus `sources` and `type`, are the required fields). Keep both sections in that shape.
+`wikiform` itself parses `## Index Categories` (a bullet or one-per-line list) and the first ` ```yaml ` block under `## Wiki Page Frontmatter` (top-level keys, minus `sources` and `type`, are the required fields). Keep both sections in that shape.
 
 ## Plugin hooks
 
 The plugin installs hooks that run automatically (they do nothing outside a vault):
 
 - **Session start** - prints a one-glance vault status (pages, raw sources awaiting ingest, ingests since last lint, search-index freshness).
-- **Guard (before Write/Edit)** - blocks edits to the generated `wiki/index.md`, `wiki/tag-index.md`, `wiki/master-index.md` once they exist, and blocks changes to the *body* of existing `raw/` files (frontmatter edits are allowed). If a write is blocked, follow the message - do not try to work around it.
+- **Guard (before Write/Edit)** - blocks edits to the generated `wiki/index.md`, `wiki/tag-index.md`, `wiki/master-index.md` once they exist, and blocks changes to the _body_ of existing `raw/` files (frontmatter edits are allowed). If a write is blocked, follow the message - do not try to work around it.
 - **Post-write (after Write/Edit on `wiki/pages/*.md`)** - validates slug naming and required frontmatter and reports problems immediately. Fix them before continuing.
 - **End of turn** - if any page changed, regenerates the three index files and runs `search index --incremental`. The explicit index steps in the modes remain valid (they are idempotent); the hook is the safety net. It never runs `search embed`.
 

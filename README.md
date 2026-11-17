@@ -70,14 +70,14 @@ wikiform --vault-root PATH search query "anomaly detection techniques" --semanti
 
 ## Supported File Types for `extract`
 
-| Type | Extensions |
-|------|------------|
-| Plain text / code | `.txt .md .py .sql .js .ts .csv .json .yaml .html .xml .sh` and more |
-| Word | `.docx .dotx` |
-| Excel | `.xlsx .xltx` |
-| PDF | `.pdf` (Java required for opendataloader-pdf; falls back to markitdown) |
-| PowerPoint | `.pptx` |
-| Binary | Size metadata only, no text extraction |
+| Type              | Extensions                                                              |
+| ----------------- | ----------------------------------------------------------------------- |
+| Plain text / code | `.txt .md .py .sql .js .ts .csv .json .yaml .html .xml .sh` and more    |
+| Word              | `.docx .dotx`                                                           |
+| Excel             | `.xlsx .xltx`                                                           |
+| PDF               | `.pdf` (Java required for opendataloader-pdf; falls back to markitdown) |
+| PowerPoint        | `.pptx`                                                                 |
+| Binary            | Size metadata only, no text extraction                                  |
 
 ## Semantic Search
 
@@ -95,6 +95,7 @@ wikiform --vault-root PATH search query "detection engineering workflow" --seman
 ```
 
 > **Note:** sqlite-vec requires Python compiled with `--enable-loadable-sqlite-extensions`. If you see `AttributeError: 'sqlite3.Connection' object has no attribute 'enable_load_extension'`, rebuild your Python:
+>
 > ```bash
 > PYTHON_CONFIGURE_OPTS="--enable-loadable-sqlite-extensions" pyenv install 3.14.0 --force
 > ```
